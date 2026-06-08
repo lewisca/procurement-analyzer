@@ -1,0 +1,93 @@
+%% Salesforce Agentforce — Atlas Reasoning Engine architecture.
+%% Sourced from cirra.ai's Atlas writeup, Einstein Trust Layer
+%% documentation, and Agentforce public material.
+
+flowchart TB
+    User([User input via chat / voice / SMS / email / in-app])
+
+    subgraph Agentforce[Salesforce Agentforce platform]
+        subgraph TrustLayerInput[Einstein Trust Layer &mdash; input side]
+            PIIMask[PII masking<br/>encrypt + mask sensitive fields<br/>BEFORE prompt reaches LLM]
+            ToxicityIn[Toxicity check]
+            PromptInjection[Prompt-injection defense]
+        end
+
+        TopicMap{Topic Mapping<br/>map user intent to predefined Topic<br/>topic carries instructions + policies + allowed_actions}
+
+        subgraph Atlas[Atlas Reasoning Engine &mdash; ReAct loop]
+            Reason[Reason<br/>LLM generates step-by-step thinking<br/>about the problem]
+            Act{Act<br/>select Action from topic.allowed_actions<br/>structurally bounded by Topic}
+            ConstellationRouter{Constellation router<br/>route sub-task to specialized LLM<br/>GPT-5 / Claude / specialized models}
+            Observe[Observe<br/>result feeds back into reasoning<br/>can incorporate user clarifications mid-task]
+            Refine[Iterative refinement<br/>self-reflection / built-in verification]
+        end
+
+        subgraph Actions[Action types]
+            Flow[Salesforce Flow<br/>visual workflow]
+            Apex[Apex<br/>server-side code]
+            API[External API calls]
+            SlackEmail[Slack / Email / SMS]
+            MCP[MCP servers<br/>Spring 2026 addition]
+        end
+
+        subgraph TrustLayerOutput[Einstein Trust Layer &mdash; output side]
+            HallucinationCheck[Hallucination detection<br/>flag ungrounded claims]
+            ToxicityOut[Toxicity check on output]
+            PIIUnmask[PII unmasking<br/>restore real values<br/>for legitimate recipient]
+            AuditLog[(Audit log<br/>per-Action / per-decision<br/>in Command Center)]
+        end
+
+        Escalate[Transfer to Human<br/>Live Agent handoff<br/>fires on confidence drop<br/>or policy threshold]
+    end
+
+    subgraph DataCloud[Data Cloud &mdash; zero-copy architecture]
+        StructuredData[(Structured data<br/>CRM records / billing / inventory<br/>retrieved on-demand, never duplicated)]
+        UnstructuredData[(Unstructured data<br/>knowledge articles / docs<br/>retrieved via RAG)]
+        ExternalSources[(External sources<br/>Snowflake / BigQuery / Databricks<br/>query-time, not copy)]
+    end
+
+    subgraph CommandCenter[Command Center &mdash; observability]
+        Traces[Per-conversation chain-of-thought traces]
+        Feedback[User signals<br/>thumbs / success / failure]
+        Flywheel[Feedback loop<br/>RL / fine-tuning over time]
+    end
+
+    User --> PIIMask
+    PIIMask --> ToxicityIn
+    ToxicityIn --> PromptInjection
+    PromptInjection -->|safe| TopicMap
+    PromptInjection -->|block| Escalate
+
+    TopicMap --> Reason
+    Reason --> ConstellationRouter
+    ConstellationRouter --> Reason
+    Reason --> Act
+    Act -->|action allowed| Actions
+    Act -->|action not in topic| Escalate
+    Actions --> Observe
+    Observe --> Refine
+    Refine -->|need more steps| Reason
+    Refine -->|confidence drop| Escalate
+    Refine -->|done| TrustLayerOutput
+
+    Observe -.queries.-> DataCloud
+
+    TrustLayerOutput --> HallucinationCheck
+    HallucinationCheck -->|grounded| ToxicityOut
+    HallucinationCheck -->|ungrounded| Escalate
+    ToxicityOut --> PIIUnmask
+    PIIUnmask --> Out([Response delivered to user])
+
+    Actions -.write-back.-> AuditLog
+    Atlas -.trace events.-> Traces
+    Out -.user signal.-> Feedback
+    Feedback -.RL signal.-> Flywheel
+
+    style PIIMask fill:#dcfce7,stroke:#15803d
+    style PromptInjection fill:#fef3c7,stroke:#b45309
+    style HallucinationCheck fill:#fef3c7,stroke:#b45309
+    style TopicMap fill:#dbeafe,stroke:#2563eb
+    style Act fill:#dbeafe,stroke:#2563eb
+    style Escalate fill:#e9d5ff,stroke:#7c3aed
+    style ConstellationRouter fill:#dcfce7,stroke:#15803d
+    style DataCloud fill:#f1f5f9,stroke:#475569

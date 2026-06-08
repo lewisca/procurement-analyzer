@@ -1,0 +1,64 @@
+%% LangGraph — Runtime architecture of the prebuilt ReAct agent
+%% (create_react_agent factory in libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py).
+%% Derived from the actual control flow in chat_agent_executor.py:should_continue
+%% and the StateGraph topology assembled by create_react_agent.
+
+flowchart TB
+    User([User input / messages]) --> StateGraph
+
+    subgraph StateGraph[StateGraph compiled runtime]
+        Entry([START])
+        Agent[agent node<br/>call_model<br/>invokes BaseChatModel.invoke or .ainvoke]
+        PreHook[[pre_model_hook<br/>optional &mdash; e.g. message trimming]]
+        PostHook[[post_model_hook<br/>optional &mdash; e.g. tool-call review]]
+        Decide{should_continue<br/>does last message have tool_calls?<br/>are remaining_steps sufficient?}
+        Tools[tools node<br/>ToolNode dispatches each tool_call in parallel via Send]
+        Structured[[generate_structured_response<br/>optional &mdash; final response formatter]]
+        Exit([END])
+    end
+
+    subgraph Persistence[Persistence layer]
+        Checkpointer[(Checkpointer<br/>InMemorySaver / SqliteSaver / PostgresSaver / CosmosDBSaver)]
+        Store[(Store<br/>cross-thread long-term memory)]
+        Snapshot[StateSnapshot<br/>values + next + config + metadata + tasks]
+    end
+
+    subgraph Observability[Streaming &amp; observability]
+        StreamModes[graph.stream stream_mode=<br/>values / updates / messages / custom / checkpoints / tasks / debug]
+        LangSmith[(LangSmith<br/>optional managed trace + eval + deployment)]
+    end
+
+    subgraph Limits[Budget &amp; recovery]
+        RecursionLimit{recursion_limit<br/>default = 25<br/>raises GraphRecursionError when hit}
+        RemainingSteps{_are_more_steps_needed<br/>if remaining_steps low + tool_calls present,<br/>emit 'need more steps' sentinel + terminate}
+        Durability{durability mode<br/>exit / async / sync}
+    end
+
+    Entry --> PreHook
+    PreHook --> Agent
+    Agent --> PostHook
+    PostHook --> Decide
+    Agent -.no pre/post hooks.-> Decide
+    Decide -->|tool_calls present| Tools
+    Decide -->|no tool_calls, response_format set| Structured
+    Decide -->|no tool_calls, no response_format| Exit
+    Tools --> PreHook
+    Structured --> Exit
+
+    Agent -.checkpoint each step.-> Checkpointer
+    Tools -.checkpoint each step.-> Checkpointer
+    Checkpointer --> Snapshot
+    Snapshot -.replay by checkpoint_id.-> StateGraph
+
+    StateGraph -.stream events.-> StreamModes
+    StreamModes -.optional export.-> LangSmith
+
+    Limits -.enforces.-> StateGraph
+
+    style Agent fill:#dbeafe,stroke:#2563eb
+    style Tools fill:#dbeafe,stroke:#2563eb
+    style Decide fill:#fef3c7,stroke:#b45309
+    style Checkpointer fill:#dcfce7,stroke:#15803d
+    style Store fill:#dcfce7,stroke:#15803d
+    style RecursionLimit fill:#fef2f2,stroke:#b91c1c
+    style RemainingSteps fill:#fef2f2,stroke:#b91c1c

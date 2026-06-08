@@ -1,0 +1,81 @@
+%% Claude Agent SDK — runtime architecture
+%% Derived from code.claude.com/docs/en/agent-sdk and
+%% github.com/anthropics/claude-agent-sdk-python.
+
+flowchart TB
+    User([User input])
+
+    subgraph SDK[Claude Agent SDK runtime]
+        UserPromptHook{UserPromptSubmit hook<br/>prompt-injection scanning<br/>intent classification}
+
+        subgraph Loop[Agent loop]
+            Claude[Claude Opus / Sonnet / Haiku<br/>called via Messages API<br/>strict tool use constrains decoding]
+            ToolDecision{Did Claude emit tool_use?<br/>Or end_turn?}
+            PreToolUseHook{PreToolUse hook<br/>matcher: tool name regex<br/>can: allow / deny / modify / prompt}
+            PermissionMode{permission_mode<br/>default / acceptEdits<br/>bypassPermissions / plan}
+
+            subgraph Tools[Tool execution]
+                ClientTool[Client tools<br/>run in developer's process<br/>Read / Write / Edit / Bash / Glob / Grep / WebFetch]
+                ServerTool[Server tools<br/>run on Anthropic infrastructure<br/>web_search / code_execution<br/>web_fetch / tool_search]
+                MCP[MCP server tools<br/>connect to external systems<br/>via Model Context Protocol]
+                AskUser[AskUserQuestion<br/>first-class clarifying-question tool<br/>multiple-choice options]
+            end
+
+            PostToolUseHook{PostToolUse hook<br/>audit log<br/>output validation<br/>transform results}
+        end
+
+        StopHook{Stop hook<br/>final-state audit}
+        Compaction[Automatic compaction<br/>summarizes earlier messages<br/>as context limit approaches]
+        Done([ResultMessage<br/>session persisted as JSONL])
+    end
+
+    subgraph Subagents[Subagent layer]
+        SubAgent[Subagent definitions<br/>specialized prompt + tool subset<br/>invoked via Agent tool<br/>parent_tool_use_id links traces]
+    end
+
+    subgraph Session[Session management]
+        SessionStore[(Sessions<br/>JSONL on developer filesystem<br/>or Managed Agents event log)]
+        Fork[fork_session]
+        Tag[tag_session]
+        Resume[resume by ID]
+    end
+
+    User --> UserPromptHook
+    UserPromptHook -->|tripwire / injection| Halt[Halt and return]
+    UserPromptHook -->|pass| Claude
+
+    Claude --> ToolDecision
+    ToolDecision -->|end_turn| StopHook
+    ToolDecision -->|tool_use| PreToolUseHook
+    PreToolUseHook -->|deny| StopHook
+    PreToolUseHook -->|prompt user| AskUser
+    PreToolUseHook -->|allow / modify| PermissionMode
+
+    PermissionMode -->|default + risky| AskUser
+    PermissionMode -->|acceptEdits / bypass| Tools
+    PermissionMode -->|plan| PlanOutput[Plan output<br/>no execution<br/>equivalent to dry-run]
+
+    Tools --> PostToolUseHook
+    PostToolUseHook --> Claude
+
+    Claude -.context grows.-> Compaction
+    Compaction -.summarized history.-> Claude
+
+    StopHook --> Done
+    Done --> SessionStore
+    SessionStore --> Fork
+    SessionStore --> Resume
+    SessionStore --> Tag
+
+    SubAgent -.invoked via Agent tool.-> Tools
+    SubAgent -.parent_tool_use_id.-> PostToolUseHook
+
+    style UserPromptHook fill:#fef3c7,stroke:#b45309
+    style PreToolUseHook fill:#fef3c7,stroke:#b45309
+    style PostToolUseHook fill:#fef3c7,stroke:#b45309
+    style StopHook fill:#fef3c7,stroke:#b45309
+    style PermissionMode fill:#dbeafe,stroke:#2563eb
+    style PlanOutput fill:#dcfce7,stroke:#15803d
+    style Halt fill:#fef2f2,stroke:#b91c1c
+    style AskUser fill:#e9d5ff,stroke:#7c3aed
+    style Compaction fill:#dcfce7,stroke:#15803d

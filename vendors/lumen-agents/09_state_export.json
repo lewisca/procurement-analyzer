@@ -1,0 +1,36 @@
+{
+  "export_format": "lumen.state.v2",
+  "trace_id": "trc_01HXYZK7P4Q9N2M3R8V5W6T1JF",
+  "tenant_id": "acme_retail_prod",
+  "exported_at": "2026-04-22T14:09:02.114Z",
+  "exported_by": "u_jane.doe@acme.example",
+  "replay_compatible_with": ["agent_runtime_v3.4", "agent_runtime_v3.5"],
+  "signature": "ed25519:5f3a...d10c",
+  "facts": [
+    {"key": "ticket.id", "value": "TKT-998877", "source_step": 1, "added_at": "2026-04-22T14:08:11.214Z"},
+    {"key": "ticket.customer_email", "value": "j.doe@example.com", "source_step": 1, "added_at": "2026-04-22T14:08:11.214Z"},
+    {"key": "customer.id", "value": "CUST-447712", "source_step": 2, "source_tool": "get_customer", "added_at": "2026-04-22T14:08:13.195Z"},
+    {"key": "customer.risk_score", "value": 0.18, "source_step": 2, "source_tool": "get_customer", "ttl_seconds": 3600, "added_at": "2026-04-22T14:08:13.195Z"},
+    {"key": "order.id", "value": "ORD-77129834", "source_step": 3, "source_tool": "get_order", "added_at": "2026-04-22T14:08:15.298Z"},
+    {"key": "order.amount_cents", "value": 24500, "source_step": 3, "source_tool": "get_order", "added_at": "2026-04-22T14:08:15.298Z"},
+    {"key": "order.status", "value": "delivered", "source_step": 3, "source_tool": "get_order", "ttl_seconds": 60, "added_at": "2026-04-22T14:08:15.298Z"},
+    {"key": "order.tracking_proof_of_delivery", "value": true, "source_step": 3, "source_tool": "get_order", "added_at": "2026-04-22T14:08:15.298Z"},
+    {"key": "policy.refund_window_days", "value": 30, "source_step": 5, "source_tool": "search_kb", "added_at": "2026-04-22T14:08:19.682Z"},
+    {"key": "refund.refund_id", "value": "RFND-2026-001482", "source_step": 8, "source_tool": "issue_refund", "added_at": "2026-04-22T14:08:33.602Z"}
+  ],
+  "decisions": [
+    {"step": 4, "decision": "proceed_with_refund_despite_pod_discrepancy", "rule_cited": "kb_refund_policy_v7#3.4", "facts_referenced": ["order.tracking_proof_of_delivery", "policy.refund_window_days"]},
+    {"step": 7, "decision": "request_human_approval", "rule_cited": "tool.issue_refund.approval_gate", "facts_referenced": ["refund.requested_cents", "refund.threshold_cents"]}
+  ],
+  "checkpoints": [
+    {"step": 2, "state_hash": "sha256:9c8a...0e1f", "facts_count_at_step": 4},
+    {"step": 3, "state_hash": "sha256:1f04...d2a8", "facts_count_at_step": 8},
+    {"step": 5, "state_hash": "sha256:7be2...3c91", "facts_count_at_step": 10},
+    {"step": 7, "state_hash": "sha256:bd31...4012", "facts_count_at_step": 12},
+    {"step": 8, "state_hash": "sha256:e09a...8f7b", "facts_count_at_step": 13}
+  ],
+  "consistency_checks_passed": 6,
+  "consistency_checks_flagged": 1,
+  "loop_detector": {"signals_fired": 0, "checked_at_every_step": true},
+  "replay_instructions": "POST /api/v1/replay with this document. The runtime will rebuild the state, re-execute each step, and compare per-step state hashes against the recorded values."
+}

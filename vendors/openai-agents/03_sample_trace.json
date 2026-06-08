@@ -1,0 +1,116 @@
+{
+  "_source": "Constructed from the OpenAI Agents SDK Runner.run() output (RunResult) and the Responses API state model. Trace structure mirrors what the SDK exposes via result.raw_responses + result.new_items + result.input_guardrail_results + result.output_guardrail_results. The SDK supports first-class tracing visualized in the OpenAI dashboard.",
+
+  "response_id": "resp_01J9X5KH3M9N2Q4R8V5W6T1JF",
+  "model": "gpt-5.5",
+  "agent_name": "support_refund_agent",
+  "thread_id": "thread_2026-05-27_a8c1d4e2",
+  "input_guardrail_results": [
+    {
+      "guardrail_name": "PII_input_filter",
+      "tripwire_triggered": false,
+      "elapsed_ms": 142
+    },
+    {
+      "guardrail_name": "off_topic_classifier",
+      "tripwire_triggered": false,
+      "elapsed_ms": 89
+    }
+  ],
+
+  "turns": [
+    {
+      "turn": 1,
+      "type": "message_output",
+      "role": "assistant",
+      "content": "I'll look up the order and customer details, then process the refund.",
+      "tool_calls": [
+        {
+          "id": "call_001",
+          "type": "function",
+          "name": "lookup_order",
+          "arguments": {"order_id": "ORD-77129834"},
+          "strict_schema_validated": true
+        }
+      ],
+      "usage": {"input_tokens": 1820, "output_tokens": 88, "reasoning_tokens": 0}
+    },
+    {
+      "turn": 2,
+      "type": "tool_output",
+      "tool_call_id": "call_001",
+      "content": "{\"order_id\":\"ORD-77129834\",\"amount_cents\":24500,\"status\":\"delivered\"}"
+    },
+    {
+      "turn": 3,
+      "type": "message_output",
+      "role": "assistant",
+      "content": "Order confirmed. Proceeding with refund...",
+      "tool_calls": [
+        {
+          "id": "call_002",
+          "type": "function",
+          "name": "issue_refund",
+          "arguments": {
+            "order_id": "ORD-77129834",
+            "amount_cents": 24500,
+            "reason_code": "item_not_received",
+            "idempotency_key": "8c9e2a1b-4f6d-4a17-b2c1-9e3d8f4a7c10"
+          },
+          "strict_schema_validated": true
+        }
+      ],
+      "usage": {"input_tokens": 412, "output_tokens": 142}
+    },
+    {
+      "turn": 4,
+      "type": "tool_output_guardrail",
+      "guardrail_name": "destructive_action_approval_gate",
+      "tripwire_triggered": true,
+      "_note": "Sample guardrail enforces that refunds > $200 require human approval. Tripwire halts execution; SDK returns the partial RunResult with the planned action visible for human review.",
+      "halted_at_turn": 4,
+      "planned_action": {
+        "tool": "issue_refund",
+        "arguments": {"order_id": "ORD-77129834", "amount_cents": 24500, "reason_code": "item_not_received"}
+      }
+    }
+  ],
+
+  "raw_responses": [
+    "[Reference to underlying OpenAI Responses API response objects, accessible via result.raw_responses]"
+  ],
+
+  "tool_input_guardrail_results": [
+    {
+      "guardrail_name": "destructive_action_approval_gate",
+      "tripwire_triggered": true,
+      "halt_reason": "amount_cents > $200 requires human approval"
+    }
+  ],
+
+  "max_turns_setting": 10,
+  "current_turn_at_halt": 4,
+  "max_turns_exceeded": false,
+
+  "final_output": null,
+  "_note_on_final_output": "Because a guardrail tripwire fired, the run halted before completion. The SDK's RunResult.interruptions field exposes the approvals_from_state — what the agent was about to do, so a human reviewer can approve, modify, or deny.",
+
+  "tracing": {
+    "enabled": true,
+    "spans_exported_to": "OpenAI dashboard tracing UI + optional custom exporters",
+    "span_data": "Every model call, tool call, guardrail check, and handoff produces a span with timing, inputs, outputs"
+  },
+
+  "session_persistence": {
+    "supported": true,
+    "mechanism": "Responses API state — pass previous_response_id to continue a conversation; the server reconstructs context. Alternatively, store messages locally and pass them back.",
+    "_doc_link": "Migrate to Responses API guide"
+  },
+
+  "_notes_on_authenticity": [
+    "Trace SHAPE is from the Agents SDK source (src/agents/run.py and src/agents/result.py).",
+    "Specific tool names and arguments are illustrative — OpenAI does not publish a per-customer sample trace publicly.",
+    "Per-turn token usage is from the Responses API documented response format.",
+    "Guardrail tripwire mechanism is verbatim from src/agents/guardrail.py — tripwire_triggered: bool field that halts execution."
+  ]
+}

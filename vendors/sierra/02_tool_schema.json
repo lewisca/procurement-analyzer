@@ -1,0 +1,83 @@
+{
+  "_source": "Composed from Sierra's public Agent SDK documentation at sierra.ai/product/develop-your-agent. Sierra does not publish a full tool schema reference publicly — actual schemas are accessible only to customers under NDA. This file documents the patterns Sierra explicitly claims to enforce: skill composition, deterministic API interactions, policy-bound execution.",
+
+  "_sierra_claims_about_tool_invocation": [
+    "When the agent accesses your systems of record, those interactions are deterministic and controlled — Sierra source: sierra.ai/product/trust-and-reliability",
+    "Sensitive payment data flows through dedicated PCI-certified infrastructure and never touches Sierra's core platform, LLMs, or persistent storage",
+    "Built-in filters and monitors for topics and keywords that are off-limits based on your company policies",
+    "Validator agents review outputs against policy rules before confirming completion — Sierra source: constellation-of-models post"
+  ],
+
+  "skills": [
+    {
+      "name": "lookup_subscription",
+      "category": "retrieve",
+      "destructiveness": "read_only",
+      "description": "Look up a customer's current subscription state.",
+      "deterministic_api_call": "GET /crm/customers/{id}/subscription",
+      "policy_bound": false,
+      "_note": "Read-only skills do not require supervisor review in Sierra's documented architecture."
+    },
+    {
+      "name": "update_subscription",
+      "category": "execute",
+      "destructiveness": "write",
+      "description": "Modify a customer's subscription (upgrade, downgrade, pause).",
+      "deterministic_api_call": "POST /crm/customers/{id}/subscription/update",
+      "policy_bound": true,
+      "supervisor_review": "required",
+      "_note": "Write skills route through a supervisor agent that validates the action against policy before commit. Sierra documents this as 'deterministic and controlled' interactions."
+    },
+    {
+      "name": "process_refund",
+      "category": "execute",
+      "destructiveness": "destructive_financial",
+      "description": "Issue a refund against a transaction.",
+      "deterministic_api_call": "POST /payments/refunds",
+      "policy_bound": true,
+      "supervisor_review": "required",
+      "infrastructure_isolation": "Routes through dedicated PCI-certified infrastructure per Sierra's published security model. Refund data never enters Sierra's core platform or LLM context.",
+      "_note": "Sierra's strongest public claim: payment-sensitive operations are architecturally isolated from the LLM."
+    },
+    {
+      "name": "escalate_to_human",
+      "category": "handoff",
+      "destructiveness": "low_risk",
+      "description": "Live Assist hand-off to a human agent with context.",
+      "policy_bound": false,
+      "_note": "Sierra explicitly retains human escalation as a first-class capability — 'if a member wants to speak to a human, that's always an option.'"
+    }
+  ],
+
+  "validation_model": {
+    "where": "Validator agents in the constellation, separate from the executor agent.",
+    "what": "Outputs reviewed against policy rules before confirming completion.",
+    "is_documented_publicly": true,
+    "is_implementation_visible": false,
+    "_note": "Sierra publishes the WHAT (validator agents enforce policy) but not the HOW (no public code, no public rule language). Procurement should request methodology details under NDA."
+  },
+
+  "deterministic_api_layer": {
+    "description": "Sierra's Agent SDK ensures 'deterministic API Interactions' — meaning the LLM does not write raw API calls. Skills are pre-defined functions with typed inputs; the LLM selects which skill and with what arguments; the SDK enforces the call shape.",
+    "source": "sierra.ai/product/develop-your-agent",
+    "buyer_implication": "Significantly reduces the risk of LLM hallucinating an API call or an unsafe parameter. Buyer's procurement team should still ask: what happens if the LLM passes a wrong argument that IS schema-valid?"
+  },
+
+  "dry_run_mode": {
+    "supported": true,
+    "mechanism": "Simulations — Sierra provides simulation tooling that verifies agent behavior across scenarios before promotion. From sierra.ai/product/develop-your-agent: 'verify your agent performs as expected across a wide range of scenarios and avoid regressions.'",
+    "scope": "Pre-deployment / regression testing. Whether per-execution dry-run for high-risk live actions is supported is not publicly documented."
+  },
+
+  "approval_gate": {
+    "supported": "documented but mechanism not public",
+    "mechanism": "Supervisors enforce guardrails, policies, and quality checks. The exact human-in-the-loop wiring (which actions require approval, who can approve, latency) is not in public material."
+  },
+
+  "_buyer_followups": [
+    "Request the actual Agent SDK reference under NDA — what does a skill definition look like in code?",
+    "Ask for the validator-agent policy DSL or rules language used.",
+    "Confirm whether per-execution dry-run is available for high-risk actions (or only batch-mode simulations).",
+    "Confirm what happens when a skill is invoked with a schema-valid but semantically wrong argument (e.g. valid customer_id, wrong customer)."
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "_source": "Constructed from the LangGraph streaming docs (stream_mode='debug') showing what an execution trace from a LangGraph agent looks like. This is the actual shape of debug-mode chunks emitted by graph.stream().",
+  "run_id": "1f3d8a92-7c4b-4e21-9c5e-8b1a2f6d4e91",
+  "thread_id": "tenant_demo_thread_42",
+  "graph_name": "react_agent",
+  "stream_version": "v2",
+  "events": [
+    {
+      "type": "checkpoints",
+      "ns": [],
+      "data": {
+        "checkpoint_id": "1ef-init",
+        "step": 0,
+        "values": {"messages": [{"role": "user", "content": "What is the weather in NYC and London?"}]},
+        "next": ["agent"]
+      }
+    },
+    {
+      "type": "tasks",
+      "ns": [],
+      "data": {
+        "task_id": "task_001",
+        "name": "agent",
+        "input": {"messages": [{"role": "user", "content": "What is the weather in NYC and London?"}]},
+        "triggers": ["start"]
+      }
+    },
+    {
+      "type": "messages",
+      "ns": ["agent"],
+      "data": [
+        {"content": "I'll", "type": "AIMessageChunk"},
+        {"langgraph_node": "agent", "tags": ["agent"]}
+      ]
+    },
+    {
+      "type": "updates",
+      "ns": [],
+      "data": {
+        "agent": {
+          "messages": [
+            {
+              "role": "ai",
+              "content": "I'll look up both cities.",
+              "tool_calls": [
+                {"id": "tc_001", "name": "get_weather", "args": {"location": "New York, NY"}},
+                {"id": "tc_002", "name": "get_weather", "args": {"location": "London, UK"}}
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "checkpoints",
+      "ns": [],
+      "data": {
+        "checkpoint_id": "1ef-step-1",
+        "step": 1,
+        "values": {"messages": ["...prior...", "AIMessage with 2 tool_calls"]},
+        "next": ["tools"]
+      }
+    },
+    {
+      "type": "tasks",
+      "ns": [],
+      "data": {
+        "task_id": "task_002",
+        "name": "tools",
+        "input": {"tool_call": {"name": "get_weather", "args": {"location": "New York, NY"}}}
+      }
+    },
+    {
+      "type": "tasks",
+      "ns": [],
+      "data": {
+        "task_id": "task_003",
+        "name": "tools",
+        "input": {"tool_call": {"name": "get_weather", "args": {"location": "London, UK"}}}
+      }
+    },
+    {
+      "type": "updates",
+      "ns": [],
+      "data": {
+        "tools": {
+          "messages": [
+            {"role": "tool", "tool_call_id": "tc_001", "name": "get_weather", "content": "{\"temp_f\": 58, \"condition\": \"cloudy\"}"},
+            {"role": "tool", "tool_call_id": "tc_002", "name": "get_weather", "content": "{\"temp_f\": 49, \"condition\": \"rain\"}"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "checkpoints",
+      "ns": [],
+      "data": {"checkpoint_id": "1ef-step-2", "step": 2, "next": ["agent"]}
+    },
+    {
+      "type": "updates",
+      "ns": [],
+      "data": {
+        "agent": {
+          "messages": [
+            {"role": "ai", "content": "New York is 58°F and cloudy; London is 49°F with rain."}
+          ]
+        }
+      }
+    },
+    {
+      "type": "checkpoints",
+      "ns": [],
+      "data": {"checkpoint_id": "1ef-step-3", "step": 3, "next": []}
+    }
+  ],
+  "_notes": [
+    "Trace contents: timestamp is not in the default debug output — it is added by LangSmith when traces are exported.",
+    "Token/cost per step: not in the default LangGraph trace. LangSmith adds these on export, but the OSS framework itself does not enforce a token/cost meter — it relies on the underlying LLM client's usage callback.",
+    "Reasoning trace: present implicitly via the AIMessage content; explicit 'plan' fields are not part of the StateGraph runtime — they would need to be a user-added state key.",
+    "Replay: any checkpoint above can be the basis for a `graph.invoke(input, {'configurable': {'thread_id': ..., 'checkpoint_id': '1ef-step-1'}})` call to re-execute from that point."
+  ]
+}

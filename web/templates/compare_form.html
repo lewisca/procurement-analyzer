@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compare vendors — Procurement Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="app-header">
+    <a href="{{ url_for('index') }}" class="brand">
+      <span class="brand-mark">PA</span>
+      Procurement Analyzer
+    </a>
+    <nav class="app-nav">
+      <a href="{{ url_for('runs_route') }}">Saved analyses</a>
+      <a href="{{ url_for('compare_form') }}">Compare</a>
+      <a href="{{ url_for('index') }}" class="primary">New analysis</a>
+    </nav>
+  </header>
+
+  <main class="container container-narrow">
+    <div style="margin-bottom: var(--s5);">
+      <h1 style="margin:0;">Compare two vendors</h1>
+      <p class="muted" style="margin: var(--s2) 0 0;">
+        Pick two saved analyses to compare side by side. The comparison shows
+        the winner, a per-category scorecard, the questions where the vendors
+        diverge most, and a per-question breakdown.
+      </p>
+    </div>
+
+    {% if runs|length < 2 %}
+      <div class="empty">
+        <p>You need at least two saved analyses to compare.</p>
+        <p><a href="{{ url_for('index') }}" class="btn btn-primary">Run another analysis</a></p>
+      </div>
+    {% else %}
+      <form action="{{ url_for('compare_route') }}" method="post" id="compare-form" class="stack">
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Vendor A (left column)</h2>
+              <p class="card-sub">Δ is computed as <em>A minus B</em>. Positive numbers mean A scores higher.</p>
+            </div>
+          </div>
+          <div class="picker">
+            {% for r in runs %}
+              <label class="picker-row">
+                <input type="radio" name="a" value="{{ r.filename }}"
+                  {% if r.filename == preselect %}checked{% endif %}>
+                <span class="picker-vendor">{{ r.vendor_name }}</span>
+                <span class="picker-meta">analyzed {{ r.analyzed_at_utc }}</span>
+                <span class="picker-score">
+                  {% set bucket = r.weighted_overall|round(0)|int %}
+                  {% if bucket < 1 %}{% set bucket = 1 %}{% elif bucket > 5 %}{% set bucket = 5 %}{% endif %}
+                  <span class="score-chip score-chip-{{ bucket }}">{{ "%.2f"|format(r.weighted_overall) }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Vendor B (right column)</h2>
+              <p class="card-sub">Pick a different vendor than A.</p>
+            </div>
+          </div>
+          <div class="picker">
+            {% for r in runs %}
+              <label class="picker-row">
+                <input type="radio" name="b" value="{{ r.filename }}">
+                <span class="picker-vendor">{{ r.vendor_name }}</span>
+                <span class="picker-meta">analyzed {{ r.analyzed_at_utc }}</span>
+                <span class="picker-score">
+                  {% set bucket = r.weighted_overall|round(0)|int %}
+                  {% if bucket < 1 %}{% set bucket = 1 %}{% elif bucket > 5 %}{% set bucket = 5 %}{% endif %}
+                  <span class="score-chip score-chip-{{ bucket }}">{{ "%.2f"|format(r.weighted_overall) }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <div class="card" style="text-align:center; padding: var(--s5);">
+          <button type="submit" class="btn btn-primary btn-lg">Compare</button>
+        </div>
+      </form>
+    {% endif %}
+  </main>
+</body>
+</html>

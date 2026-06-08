@@ -1,0 +1,100 @@
+# Lumen Agents — default tenant configuration reference.
+# This is the schema buyers see in their admin console / Terraform provider.
+# Per-tenant overrides are layered on top of these defaults.
+
+tenant:
+  id_format: "^[a-z][a-z0-9_-]{2,63}$"
+  data_residency_default: "us-east-1"
+  data_residency_supported: ["us-east-1", "eu-frankfurt-1", "uk-london-1", "ap-sydney-1"]
+
+agent_runtime:
+  version: "v3.5"
+  default_model: "claude-sonnet-4-6"
+  model_pinning_supported: true
+  model_change_notice_days: 30
+
+budgets:
+  step_limit:
+    default: 25
+    max_allowed: 50
+    enforcement: "runtime_hard"      # not advisory
+  token_budget_per_run:
+    default: 20000
+    alert_pct: 80
+    hard_stop_pct: 100
+  cost_cap_per_run_usd:
+    default: 0.25
+    alert_pct: 80
+    hard_stop_pct: 100
+  tenant_monthly_cost_cap_usd:
+    default: null                    # disabled by default
+    alert_pct: 80
+    hard_stop_pct: 100
+
+approvals:
+  # Maps tool destructiveness levels to approval requirements.
+  destructive_tools:
+    require_human: true
+    auto_approve: never
+  write_high_risk_tools:
+    require_human_if: "amount_cents > tenant.auto_approve_threshold_cents OR customer.risk_score >= 0.3"
+    auto_approve_threshold_cents: 10000
+  approval_timeout_seconds:
+    default: 1200
+    on_timeout: "escalate_to_oncall"
+
+tool_allowlist:
+  # Tenants explicitly opt tools in. The agent cannot call a tool that
+  # is not in this list, even if it appears in the schema.
+  default: []
+  example:
+    - get_order
+    - get_customer
+    - search_kb
+    - issue_refund
+    - escalate_to_human
+
+rbac:
+  default_role_for_new_users: "viewer"
+  roles:
+    owner: ["*"]
+    admin: ["config.*", "rbac.*", "export.*", "approval.*"]
+    auditor: ["read.*", "export.traces", "export.audit_log"]
+    operator: ["approval.respond", "trace.read"]
+    viewer: ["trace.read"]
+
+retention:
+  agent_traces_days: 365         # configurable down to 30
+  audit_log_days: 365            # configurable down to 90
+  kb_content: "retain_until_deleted"
+
+observability:
+  trace_export:
+    formats: ["json", "ndjson", "csv"]
+    destinations_supported: ["s3", "gcs", "splunk", "sumologic", "webhook"]
+  alerts:
+    channels: ["email", "webhook", "pagerduty", "slack"]
+    routes:
+      - signal: "budget.cost_cap_approaching"
+        threshold_pct: 80
+        channels: ["slack", "email"]
+      - signal: "loop_detected"
+        channels: ["pagerduty", "slack"]
+      - signal: "contradiction_detected"
+        channels: ["slack"]
+
+security:
+  sso:
+    saml: true
+    oidc: true
+    required_for_admin: true
+  mfa:
+    required_for_admin: true
+    methods: ["totp", "webauthn"]
+  encryption:
+    in_transit_min_tls: "1.3"
+    at_rest_alg: "AES-256-GCM"
+    byok_supported_on_tiers: ["enterprise"]
+  egress:
+    per_tenant_proxy: true
+    allowed_destinations: "tenant.tool_allowlist + tenant.kb_sources"

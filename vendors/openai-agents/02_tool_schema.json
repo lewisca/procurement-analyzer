@@ -1,0 +1,142 @@
+{
+  "_source": "Extracted from developers.openai.com/api/docs/guides/function-calling and the Tools guide. This is the actual schema format OpenAI requires for function calling in the Responses API and the Agents SDK.",
+
+  "schema_format": "JSON Schema (subset)",
+  "validation_mode": "strict (recommended) or non-strict",
+
+  "strict_mode": {
+    "behavior": "When strict: true, the model is constrained at decode time to emit only JSON that conforms to the schema. This is enforced via OpenAI's structured outputs mechanism, not as post-hoc validation.",
+    "requirements": [
+      "additionalProperties must equal false for each object",
+      "All fields in properties must be marked required",
+      "Optional fields use type: ['string', 'null'] (union with null)",
+      "Some advanced JSON Schema features remain unsupported"
+    ],
+    "default_under_responses_api": "When strict is omitted, the Responses API normalizes the schema into strict mode automatically. Chat Completions remains non-strict by default."
+  },
+
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Retrieves current weather for the given location.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "City and country e.g. Bogotá, Colombia"
+          },
+          "units": {
+            "type": "string",
+            "enum": ["celsius", "fahrenheit"],
+            "description": "Units the temperature will be returned in."
+          }
+        },
+        "required": ["location", "units"],
+        "additionalProperties": false
+      },
+      "strict": true,
+      "destructiveness": "read_only"
+    },
+
+    {
+      "type": "function",
+      "name": "issue_refund",
+      "description": "Issue a refund against an order.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {"type": "string", "pattern": "^ORD-[0-9]{5,10}$"},
+          "amount_cents": {"type": "integer", "minimum": 0, "maximum": 100000000},
+          "reason_code": {
+            "type": "string",
+            "enum": ["duplicate_charge", "item_not_received", "defective_item", "customer_request", "other"]
+          },
+          "idempotency_key": {"type": "string", "pattern": "^[a-f0-9-]{36}$"}
+        },
+        "required": ["order_id", "amount_cents", "reason_code", "idempotency_key"],
+        "additionalProperties": false
+      },
+      "strict": true,
+      "destructiveness": "write_high_risk",
+      "_note": "Destructiveness, idempotency, and approval requirements are NOT first-class fields in OpenAI's tool schema — they're application-layer conventions. The schema itself enforces only argument validity."
+    },
+
+    {
+      "type": "web_search",
+      "_builtin": true,
+      "_doc": "Includes current internet data in model responses. Model automatically decides whether to invoke based on prompt context.",
+      "_sandboxing": "Runs in OpenAI's infrastructure; results returned to model as content blocks"
+    },
+
+    {
+      "type": "file_search",
+      "_builtin": true,
+      "vector_store_ids": ["<vector_store_id>"],
+      "_doc": "Searches uploaded file contents to provide context during response generation."
+    },
+
+    {
+      "type": "code_interpreter",
+      "_builtin": true,
+      "_sandboxing": "Hosted shell + Code Interpreter run in isolated container sessions, billed at the 20-minute session rate per OpenAI pricing",
+      "_doc": "Executes Python in a sandboxed environment. Useful for computation, file I/O on uploaded files, plotting."
+    },
+
+    {
+      "type": "computer_use",
+      "_builtin": true,
+      "_doc": "Enables agentic workflows where models control computer interfaces. Higher-risk tool — explicit safety analysis in Operator system card."
+    },
+
+    {
+      "type": "mcp",
+      "_builtin": true,
+      "server_label": "<identifier>",
+      "server_url": "<endpoint>",
+      "require_approval": "never | once | always",
+      "_doc": "Remote Model Context Protocol server access. The require_approval setting is OpenAI's first-class human-in-the-loop gate for external MCP tools."
+    }
+  ],
+
+  "validation_layer": {
+    "stage": "decode_time_under_strict_mode",
+    "strategy": "Structured outputs constrain the model's token-level decoding to produce only schema-conforming JSON. When strict is enabled, schema-invalid output is structurally impossible for the model to emit.",
+    "what_this_protects_against": [
+      "Hallucinated parameter types (string for int, etc.)",
+      "Missing required fields",
+      "Extra unexpected fields when additionalProperties: false",
+      "Out-of-enum values"
+    ],
+    "what_this_does_NOT_protect_against": [
+      "Semantically wrong but schema-valid arguments (e.g. valid order_id, wrong order)",
+      "Business-rule violations (refund amount > order amount)",
+      "Foreign-key non-existence (calling with an ID that does not exist in the buyer's system)",
+      "Idempotency violations (developer must implement)"
+    ]
+  },
+
+  "parallel_tool_calls": {
+    "default": "enabled",
+    "control": "Set parallel_tool_calls: false to restrict to zero or one tool call per turn.",
+    "implication": "Multiple tools can fire in parallel by default. Buyer's tool handlers must be designed for concurrent execution OR the developer must opt out per-call."
+  },
+
+  "tool_choice": {
+    "modes": ["auto (default)", "required", "{\"type\": \"function\", \"name\": \"X\"}", "allowed_tools"],
+    "_doc": "Explicit guidance on which tools the model can invoke; can force a specific function or restrict to a subset"
+  },
+
+  "approval_gate": {
+    "mcp_only_built_in": "require_approval: 'never' | 'once' | 'always' on MCP server tools",
+    "function_calls": "No built-in per-function approval gate. Developer must implement at the application layer or via the Agents SDK's input/output guardrails.",
+    "agents_sdk_pattern": "InputGuardrail / OutputGuardrail with tripwire_triggered halts execution before or after a tool call."
+  },
+
+  "tool_search": {
+    "available_from": "GPT-5.4+",
+    "_doc": "Dynamically loads tool definitions at runtime via defer_loading flag. Lets the model select from large tool catalogs without loading all definitions upfront.",
+    "_implication": "Reduces context-token cost for vendors with many tools."
+  }
+}

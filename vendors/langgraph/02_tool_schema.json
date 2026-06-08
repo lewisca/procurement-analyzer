@@ -1,0 +1,73 @@
+{
+  "_source": "Composed from LangChain's @tool decorator pattern and the LangGraph ToolNode interface. Tool schemas in LangGraph are Pydantic / TypedDict based; this file shows the canonical pattern users adopt when defining tools for a LangGraph agent.",
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get current weather for a given location.",
+      "destructiveness": "read_only",
+      "_defined_via": "@tool decorator from langchain_core.tools",
+      "args_schema": {
+        "type": "object",
+        "title": "GetWeatherInput",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "City name, e.g. 'San Francisco, CA'."
+          }
+        },
+        "required": ["location"]
+      },
+      "return_schema": {"type": "string"}
+    },
+    {
+      "name": "search_database",
+      "description": "Run a parameterized read query against the customer database.",
+      "destructiveness": "read_only",
+      "args_schema": {
+        "type": "object",
+        "title": "SearchInput",
+        "properties": {
+          "query": {"type": "string", "minLength": 3, "maxLength": 500},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 50}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "send_email",
+      "description": "Send an email on behalf of the user.",
+      "destructiveness": "write_low_risk",
+      "args_schema": {
+        "type": "object",
+        "required": ["to", "subject", "body"],
+        "properties": {
+          "to": {"type": "string", "format": "email"},
+          "subject": {"type": "string", "maxLength": 200},
+          "body": {"type": "string"}
+        }
+      }
+    }
+  ],
+  "tool_node": {
+    "description": "Prebuilt `ToolNode` from `langgraph.prebuilt` executes tool calls emitted by the LLM. It does not by itself add validation beyond the @tool decorator's Pydantic schema — validation happens inside the tool function or via Pydantic at the boundary.",
+    "behavior_on_error": "ToolNode catches tool execution exceptions and returns them as ToolMessage content to the LLM. The LLM can then decide to retry or replan. There is no built-in bounded-retry counter; the recursion_limit on the graph is the only hard backstop.",
+    "parallel_tool_calls": "Supported. The agent node may emit multiple tool calls in one LLM step; ToolNode dispatches them in parallel via the `Send` API (v2 streaming)."
+  },
+  "validation_notes": {
+    "where_validation_happens": "Pydantic schema validation happens when the tool is called — i.e. after the LLM has already emitted a tool call but before the function body executes. The @tool decorator wraps the function with the Pydantic model declared via args_schema.",
+    "what_is_NOT_validated_by_default": [
+      "Foreign-key existence (e.g. does this order_id exist in the CRM)",
+      "Business-rule constraints (e.g. refund amount <= order amount)",
+      "Cross-tool consistency (e.g. tool A's output makes tool B's call invalid)"
+    ],
+    "guidance": "Users are expected to add these checks inside the tool function body. The framework does not provide a generic validation layer."
+  },
+  "dry_run_mode": {
+    "supported": false,
+    "workaround": "Use a checkpointer + interrupt_before=['tools'] to pause before tool execution, inspect the planned call, then resume with `graph.invoke(None, config)` to execute or `graph.update_state(...)` to modify before execution."
+  },
+  "approval_gate": {
+    "supported": true,
+    "mechanism": "interrupt_before=['tools'] or interrupt_after=['agent'] pauses the graph before tool execution. The orchestrator can present the planned tool call to a human, gather approval, and resume. This is documented as 'human-in-the-loop' in the LangGraph persistence guide."
+  }
+}

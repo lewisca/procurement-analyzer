@@ -1,0 +1,64 @@
+{
+  "_source": "Sierra does not publish sample execution traces in its public material. Customer-facing traces are accessible only via the Insights observability product (Insights 2.0 / Explorer) under contract. The shape below is reconstructed from Sierra's documented architecture (constellation of models with planner → executor → validator routing) and is illustrative — buyer should request a real trace from Sierra under NDA before signing.",
+
+  "_documented_capabilities_supporting_traces": [
+    "Insights 2.0 / Explorer: 'can instantly analyze huge numbers of interactions to diagnose issues and identify improvements'",
+    "Observability documented at sierra.ai/product/develop-your-agent: 'inspecting API calls, logic traces, and more'"
+  ],
+
+  "interaction_id": "sierra_int_2026-05-27_a8c1d4e2",
+  "tenant": "retail_demo_enterprise",
+  "channel": "voice",
+  "agent_id": "subscription_management_v3",
+  "started_at": "2026-05-27T14:08:11.214Z",
+  "completed_at": "2026-05-27T14:09:33.951Z",
+  "outcome": "resolved_outcome_chargeable",
+  "duration_ms": 82737,
+
+  "constellation_routing": [
+    {"step": 1, "role": "transcription", "model": "in-house_voice_model_v4", "purpose": "Convert voice to text"},
+    {"step": 2, "role": "planner", "model": "claude_sonnet_routing", "purpose": "Parse user intent, propose plan"},
+    {"step": 3, "role": "classifier", "model": "intent_classifier_v2", "purpose": "Confirm intent: 'change subscription tier'"},
+    {"step": 4, "role": "retriever", "model": "knowledge_retriever_v3", "purpose": "Pull plan options + policy context"},
+    {"step": 5, "role": "executor", "model": "tool_calling_low_latency", "purpose": "Select skill: update_subscription"},
+    {"step": 6, "role": "validator", "model": "policy_validator_v2", "purpose": "Verify action against tenant policy"},
+    {"step": 7, "role": "responder", "model": "tone_model_v3", "purpose": "Compose customer-facing response"}
+  ],
+
+  "skill_invocations": [
+    {
+      "step": 5,
+      "skill": "lookup_subscription",
+      "args": {"customer_id": "CUST-447712"},
+      "deterministic_api_call": "GET /crm/customers/CUST-447712/subscription",
+      "validator_approved": true,
+      "result": {"current_tier": "standard", "next_billing_date": "2026-06-15"}
+    },
+    {
+      "step": 6,
+      "skill": "update_subscription",
+      "args": {"customer_id": "CUST-447712", "new_tier": "premium", "effective": "next_billing_cycle"},
+      "deterministic_api_call": "POST /crm/customers/CUST-447712/subscription/update",
+      "validator_approved": true,
+      "validator_notes": "Policy match: tier change within member's plan family. No payment-sensitive action required at this step.",
+      "result": {"status": "scheduled", "confirmation_id": "SUB-CHG-2026-009811"}
+    }
+  ],
+
+  "guardrail_events": [
+    {"timestamp": "2026-05-27T14:08:33Z", "type": "topic_filter_pass", "check": "off_limits_keyword_scan", "outcome": "no_violation"},
+    {"timestamp": "2026-05-27T14:08:45Z", "type": "pii_masking", "check": "mask_account_number_in_logs", "outcome": "masked"}
+  ],
+
+  "observability": {
+    "insights_explorer_link": "(buyer-facing, NDA-only)",
+    "exportable": "via Sierra's customer console; full execution metadata available",
+    "retention_default": "(not publicly documented; ask Sierra)"
+  },
+
+  "_caveats_for_procurement": [
+    "This trace is RECONSTRUCTED from public documentation. Sierra does not publish a representative trace schema in its public material — only descriptions.",
+    "Verify the actual trace shape and content against a sample provided by Sierra under NDA before signing.",
+    "Specifically request: (a) reasoning/decision text from the planner step, (b) tokens / cost per step if available, (c) what fields are PII-masked vs. visible in trace, (d) retention defaults for traces (most enterprise buyers will negotiate down)."
+  ]
+}

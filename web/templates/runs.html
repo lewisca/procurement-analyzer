@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saved analyses — Procurement Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="app-header">
+    <a href="{{ url_for('index') }}" class="brand">
+      <span class="brand-mark">PA</span>
+      Procurement Analyzer
+    </a>
+    <nav class="app-nav">
+      <a href="{{ url_for('runs_route') }}">Saved analyses</a>
+      <a href="{{ url_for('compare_form') }}">Compare</a>
+      <a href="{{ url_for('index') }}" class="primary">New analysis</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="row row-between" style="margin-bottom: var(--s5);">
+      <div>
+        <h1 style="margin:0;">Saved analyses</h1>
+        <p class="muted small" style="margin:4px 0 0;">
+          Every analysis is auto-saved as JSON. Use this list to compare two vendors side by side.
+        </p>
+      </div>
+      {% if runs|length >= 2 %}
+        <a href="{{ url_for('compare_form') }}" class="btn btn-primary">Compare two</a>
+      {% endif %}
+    </div>
+
+    {% if not runs %}
+      <div class="empty">
+        <p>No saved analyses yet.</p>
+        <p><a href="{{ url_for('index') }}" class="btn btn-primary">Run your first analysis</a></p>
+      </div>
+    {% else %}
+      <div class="card card-tight" style="padding: 0;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Vendor</th>
+              <th>Score</th>
+              <th>Analyzed</th>
+              <th>Model</th>
+              <th>File</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in runs %}
+            <tr>
+              <td><strong>{{ r.vendor_name }}</strong></td>
+              <td>
+                {% set bucket = r.weighted_overall|round(0)|int %}
+                {% if bucket < 1 %}{% set bucket = 1 %}{% elif bucket > 5 %}{% set bucket = 5 %}{% endif %}
+                <span class="score-chip score-chip-{{ bucket }}">{{ "%.2f"|format(r.weighted_overall) }}</span>
+              </td>
+              <td class="muted small">{{ r.analyzed_at_utc }}</td>
+              <td><span class="mono small">{{ r.model }}</span></td>
+              <td><span class="mono small muted">{{ r.filename }}</span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </main>
+</body>
+</html>

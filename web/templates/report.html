@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ vendor_name }} — Procurement Evaluation</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="app-header">
+    <a href="{{ url_for('index') }}" class="brand">
+      <span class="brand-mark">PA</span>
+      Procurement Analyzer
+    </a>
+    <nav class="app-nav">
+      <a href="{{ url_for('runs_route') }}">Saved analyses</a>
+      <a href="{{ url_for('compare_form') }}">Compare</a>
+      <a href="{{ url_for('index') }}" class="primary">New analysis</a>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    {# Page-level action bar #}
+    <div class="row row-between" style="margin-bottom: var(--s5);">
+      <div>
+        <h1 style="margin:0;">{{ vendor_name }}</h1>
+        <p class="muted small" style="margin:4px 0 0;">Analyzed {{ analyzed_at }}</p>
+      </div>
+      <div class="row">
+        {% if run_filename %}
+          <a class="btn btn-secondary" href="{{ url_for('compare_form', **{'with': run_filename}) }}">Compare with another vendor</a>
+        {% endif %}
+        <form action="{{ url_for('download_markdown', vendor_slug=vendor_slug) }}" method="post" style="display:inline">
+          <input type="hidden" name="markdown" value="{{ report_markdown }}">
+          <button type="submit" class="btn btn-secondary">Download markdown</button>
+        </form>
+      </div>
+    </div>
+
+    {# Executive summary card #}
+    <section class="exec-summary">
+      <div class="exec-grid">
+        <div class="exec-score">
+          <div class="exec-score-num">{{ "%.2f"|format(weighted) }}<span class="denom"> / 5.0</span></div>
+          {% if weighted >= 4.5 %}
+            <span class="exec-verdict exec-verdict-strong">Strong fit</span>
+          {% elif weighted >= 3.5 %}
+            <span class="exec-verdict exec-verdict-ok">Acceptable with mitigations</span>
+          {% elif weighted >= 2.5 %}
+            <span class="exec-verdict exec-verdict-concerns">Material concerns</span>
+          {% else %}
+            <span class="exec-verdict exec-verdict-no">Not recommended</span>
+          {% endif %}
+          <p class="small muted" style="margin:var(--s2) 0 0;">Weighted across 3 risk categories.</p>
+        </div>
+        <div class="exec-body">
+          <h2 style="margin-top:0;">Executive summary</h2>
+          {% if weighted >= 4.5 %}
+            <p>This vendor's documentation matches or exceeds what we'd expect from a production-ready agentic AI platform. Few gaps are unresolved.</p>
+            <div class="exec-action">
+              <span class="label">Recommended next step</span>
+              Negotiate contract terms (DPA, model-change notice, exit/portability), verify the few remaining gaps listed below, and proceed to a paid pilot.
+            </div>
+          {% elif weighted >= 3.5 %}
+            <p>The vendor is broadly capable but has notable gaps that should be resolved before contract signing.</p>
+            <div class="exec-action">
+              <span class="label">Recommended next step</span>
+              Take the items in <em>Top concerns</em> and <em>What to do next</em> back to the vendor. Require contractual or documented remediation. Do not skip a structured pilot.
+            </div>
+          {% elif weighted >= 2.5 %}
+            <p>The vendor has significant gaps across multiple risk categories. Proceeding without remediation is not advised.</p>
+            <div class="exec-action">
+              <span class="label">Recommended next step</span>
+              Use the <em>Top concerns</em> list below as a discussion agenda. Consider parallel evaluation of an alternative vendor. If proceeding, structure the engagement as a time-boxed pilot with explicit exit terms.
+            </div>
+          {% else %}
+            <p>Critical capabilities are missing or undisclosed. The risk of deploying this vendor in any consequential workflow is high.</p>
+            <div class="exec-action">
+              <span class="label">Recommended next step</span>
+              Do not proceed without fundamental remediation. Look at alternative vendors who can answer the questions in this rubric.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <details class="howto">
+      <summary>First time reading a report like this? Read this.</summary>
+      <p>
+        This report scores one vendor's documentation against a 15-question rubric across three risk categories that are unique to agentic AI.
+      </p>
+      <ul>
+        <li><strong>Executive summary</strong> — above. The verdict, the score, the next step.</li>
+        <li><strong>At a glance</strong> — top 3 concerns (lowest scores) and top 3 strengths (highest scores). Start here.</li>
+        <li><strong>Artifact coverage</strong> — what the vendor actually sent versus what we asked for.</li>
+        <li><strong>Scorecard by category</strong> — averages for each of the 3 risk categories.</li>
+        <li><strong>Per-category breakdown</strong> — every question with the score, reasoning, and verbatim evidence quoted from the vendor's files.</li>
+        <li><strong>What to do next</strong> — specific items to take back to the vendor.</li>
+        <li><strong>Glossary</strong> — quick definitions of agentic-AI terms used throughout.</li>
+      </ul>
+      <p>
+        Score chips are colored: <span class="score-chip score-chip-5">5 / 5</span> excellent, <span class="score-chip score-chip-4">4 / 5</span> strong, <span class="score-chip score-chip-3">3 / 5</span> acceptable with mitigations, <span class="score-chip score-chip-2">2 / 5</span> major gap, <span class="score-chip score-chip-1">1 / 5</span> critical gap.
+      </p>
+    </details>
+
+    <div class="report-body">
+      {{ report_html|safe }}
+    </div>
+
+    <p class="method-note">
+      <span class="lead">About this report</span>
+      Generated by the Procurement Analyzer. Scores are produced by a large language model
+      against a structured rubric and are intended to accelerate, not replace, buyer judgement.
+      Verify cited evidence in the source documents before acting on the verdict.
+    </p>
+  </main>
+</body>
+</html>

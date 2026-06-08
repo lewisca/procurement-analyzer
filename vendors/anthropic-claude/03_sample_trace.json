@@ -1,0 +1,134 @@
+{
+  "_source": "Constructed from the Claude Agent SDK message types (SystemMessage, AssistantMessage, ResultMessage, etc.) documented at code.claude.com/docs/en/agent-sdk and from the actual message iteration pattern shown in the SDK Python repo. Anthropic does not publish a per-customer sample trace, but the SDK emits structured messages that can be logged for auditing.",
+
+  "session_id": "sess_01J9X5KH3M9N2Q4R8V5W6T1JF",
+  "model": "claude-opus-4-8",
+  "started_at": "2026-06-04T14:08:11.214Z",
+
+  "messages": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "data": {
+        "session_id": "sess_01J9X5KH3M9N2Q4R8V5W6T1JF",
+        "cwd": "/workspace/support",
+        "model": "claude-opus-4-8",
+        "allowed_tools": ["Read", "Glob", "Grep", "lookup_order", "issue_refund", "escalate_to_human", "AskUserQuestion"],
+        "disallowed_tools": [],
+        "permission_mode": "default",
+        "hooks_registered": ["PreToolUse", "PostToolUse", "Stop"]
+      }
+    },
+
+    {
+      "type": "assistant",
+      "subtype": "thinking",
+      "content": "I need to look up the order first, verify the customer's claim, then issue the refund if policy permits.",
+      "_note": "If thinking is enabled (anthropic.com extended thinking), reasoning blocks appear before tool calls"
+    },
+
+    {
+      "type": "assistant",
+      "subtype": "tool_use",
+      "tool_call": {
+        "id": "tu_001",
+        "name": "lookup_order",
+        "input": {"order_id": "ORD-77129834"},
+        "strict_validated": true
+      },
+      "usage": {"input_tokens": 1820, "output_tokens": 88}
+    },
+
+    {
+      "type": "hook_pretooluse",
+      "matcher": "lookup_order",
+      "decision": "allow",
+      "elapsed_ms": 12,
+      "_note": "PreToolUse hook ran before tool execution. For read-only tools it allows; for issue_refund below it will check policy."
+    },
+
+    {
+      "type": "tool_result",
+      "tool_call_id": "tu_001",
+      "content": "{\"order_id\":\"ORD-77129834\",\"amount_cents\":24500,\"status\":\"delivered\"}"
+    },
+
+    {
+      "type": "assistant",
+      "subtype": "tool_use",
+      "tool_call": {
+        "id": "tu_002",
+        "name": "issue_refund",
+        "input": {
+          "order_id": "ORD-77129834",
+          "amount_cents": 24500,
+          "reason_code": "item_not_received",
+          "idempotency_key": "8c9e2a1b-4f6d-4a17-b2c1-9e3d8f4a7c10"
+        },
+        "strict_validated": true
+      },
+      "usage": {"input_tokens": 412, "output_tokens": 142}
+    },
+
+    {
+      "type": "hook_pretooluse",
+      "matcher": "issue_refund",
+      "decision": "deny_and_prompt_user",
+      "elapsed_ms": 8,
+      "reason": "Refund amount $245.00 > $200 auto-approve threshold",
+      "_note": "The PreToolUse hook blocked execution and the SDK now waits for user / approver decision."
+    },
+
+    {
+      "type": "assistant",
+      "subtype": "tool_use",
+      "tool_call": {
+        "id": "tu_003",
+        "name": "AskUserQuestion",
+        "input": {
+          "question": "Refund of $245.00 to customer requires approval. Approve?",
+          "options": ["approve", "deny", "escalate to supervisor"]
+        }
+      },
+      "_note": "AskUserQuestion is a first-class built-in tool. The SDK pauses and surfaces the question to the caller."
+    },
+
+    {
+      "type": "user_response",
+      "tool_call_id": "tu_003",
+      "content": "approve"
+    },
+
+    {
+      "type": "tool_result",
+      "tool_call_id": "tu_002",
+      "content": "{\"refund_id\":\"RFND-2026-001482\",\"status\":\"settled\"}",
+      "_note": "After approval, issue_refund executed and returned successfully"
+    },
+
+    {
+      "type": "result",
+      "subtype": "success",
+      "result": "Refund of $245.00 has been processed for order ORD-77129834. Customer will see the credit in 3-5 business days.",
+      "total_turns": 7,
+      "total_input_tokens": 4421,
+      "total_output_tokens": 612,
+      "stop_reason": "end_turn"
+    }
+  ],
+
+  "_session_persistence": {
+    "format": "JSONL on developer's filesystem",
+    "location": "~/.claude/sessions/<session_id>.jsonl or developer-specified",
+    "supports_resume": true,
+    "supports_fork": true,
+    "_implication": "Buyer can replay or branch any agent run. Forking is a first-class operation: graph.fork_session() in the SDK."
+  },
+
+  "_caveats_for_procurement": [
+    "Trace SHAPE is real — extracted from the Agent SDK message types.",
+    "Specific tool names and arguments are illustrative — Anthropic does not publish per-customer sample traces.",
+    "PreToolUse / PostToolUse hooks are an Anthropic-specific differentiator vs OpenAI; the trace shows real hook-driven flow control.",
+    "AskUserQuestion as a built-in tool is unusual — most SDKs leave user interaction as a developer-implemented integration."
+  ]
+}

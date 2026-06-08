@@ -1,0 +1,87 @@
+%% Sierra — Constellation of Models architecture.
+%% Sourced from sierra.ai/blog/constellation-of-models and
+%% sierra.ai/product/trust-and-reliability.
+%%
+%% Render at https://mermaid.live
+
+flowchart TB
+    Customer([Customer<br/>chat / voice / SMS / email / WhatsApp / ChatGPT])
+
+    subgraph Sierra[Sierra Agent OS]
+
+        Channel[Channel adapter<br/>unified ingress]
+        Planner[Planner agent<br/>parses intent into structured steps]
+        Classifier[Classifier model<br/>high-precision intent ID<br/>e.g. fraud, churn, support]
+        Retriever[Retriever model<br/>pulls policy + context<br/>Linnaeus / Darwin search]
+
+        subgraph Executor[Executor layer<br/>15+ models, task-routed]
+            LowLatencyTool[Low-latency<br/>tool-calling model<br/>order management, lookups]
+            LongContext[Long-context<br/>reasoning model<br/>policy / case analysis]
+            ToneModel[Tone model<br/>warm, on-brand response]
+        end
+
+        Validator{Validator agent<br/>policy compliance check<br/>output review BEFORE commit}
+        Failover{Provider health monitor<br/>latency / error / timeout<br/>auto-failover to peer model}
+
+        subgraph Guardrails[Always-on guardrails]
+            PIIMask[PII masker<br/>auto-encrypt + mask]
+            TopicFilter[Topic / keyword filter<br/>off-limits content blocker]
+            PaymentIsolation{{PCI-isolated payment path<br/>NEVER touches LLM or core platform}}
+        end
+
+        subgraph ADP[Agent Data Platform<br/>memory + context]
+            UnstructuredMemory[(Unstructured<br/>call / chat / email history)]
+            StructuredData[(Structured customer data<br/>CRM, billing, inventory, policies)]
+        end
+
+        subgraph Observability[Insights 2.0]
+            Explorer[Explorer<br/>analyze interactions]
+            ExpertAnswers[Expert Answers<br/>grounded knowledge curation]
+            Traces[(Per-interaction trace)]
+        end
+    end
+
+    SystemsOfRecord[(Customer systems of record<br/>Salesforce / Snowflake / Databricks / Redis / AWS / GCP)]
+    PaymentInfra[(PCI-certified<br/>payment infrastructure)]
+    Human[Human agent<br/>Live Assist handoff]
+
+    Customer --> Channel
+    Channel --> Planner
+    Planner --> Classifier
+    Classifier --> Retriever
+    Retriever --> Executor
+    Executor --> Validator
+
+    Validator -->|approved + safe| SystemsOfRecord
+    Validator -->|payment action| PaymentInfra
+    Validator -->|rejected / off-policy| Human
+    Validator -->|customer requested| Human
+
+    Executor -.-> Failover
+    Failover -.routes around degraded provider.-> Executor
+
+    Channel -.-> PIIMask
+    PIIMask -.-> ADP
+    Channel -.-> TopicFilter
+    TopicFilter -.violation.-> Human
+
+    ADP -.context.-> Planner
+    ADP -.context.-> Retriever
+    ADP -.context.-> Executor
+
+    Planner -.-> Traces
+    Executor -.-> Traces
+    Validator -.-> Traces
+    Traces -.-> Explorer
+    ExpertAnswers -.feeds.-> Retriever
+
+    PaymentInfra -.-> PaymentIsolation
+    PaymentIsolation -.confines.-> SystemsOfRecord
+
+    style Planner fill:#dbeafe,stroke:#2563eb
+    style Validator fill:#fef3c7,stroke:#b45309
+    style Failover fill:#fef3c7,stroke:#b45309
+    style PaymentIsolation fill:#dcfce7,stroke:#15803d
+    style PIIMask fill:#dcfce7,stroke:#15803d
+    style TopicFilter fill:#dcfce7,stroke:#15803d
+    style Human fill:#e9d5ff,stroke:#7c3aed

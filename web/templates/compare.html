@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ left_name }} vs {{ right_name }} — Procurement Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="app-header">
+    <a href="{{ url_for('index') }}" class="brand">
+      <span class="brand-mark">PA</span>
+      Procurement Analyzer
+    </a>
+    <nav class="app-nav">
+      <a href="{{ url_for('runs_route') }}">Saved analyses</a>
+      <a href="{{ url_for('compare_form') }}">Compare</a>
+      <a href="{{ url_for('index') }}" class="primary">New analysis</a>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <div class="row row-between" style="margin-bottom: var(--s5);">
+      <div>
+        <h1 style="margin:0;">Vendor comparison</h1>
+        <p class="muted small" style="margin:4px 0 0;">{{ left_name }} vs {{ right_name }}</p>
+      </div>
+      <div class="row">
+        <a class="btn btn-secondary" href="{{ url_for('compare_form') }}">Pick different vendors</a>
+        <form action="{{ url_for('download_markdown', vendor_slug=comparison_slug) }}" method="post" style="display:inline">
+          <input type="hidden" name="markdown" value="{{ report_markdown }}">
+          <button type="submit" class="btn btn-secondary">Download markdown</button>
+        </form>
+      </div>
+    </div>
+
+    {# Head-to-head hero #}
+    <section class="compare-hero">
+      <div class="compare-side {% if winner == 'left' %}winner{% endif %}">
+        <div class="vname">{{ left_name }}</div>
+        <div class="vscore">{{ "%.2f"|format(left_weighted) }}<span class="denom"> / 5</span></div>
+        {% if winner == 'left' %}
+          <span class="badge badge-primary" style="margin-top: var(--s2);">Higher score</span>
+        {% endif %}
+      </div>
+      <div class="compare-vs">
+        VS
+        <div class="mono" style="margin-top: var(--s2); font-size: 15px; color: var(--text);">Δ {{ "%+.2f"|format(weighted_delta) }}</div>
+        {% if winner == 'tie' %}
+          <span class="badge badge-muted" style="margin-top: var(--s2);">Effective tie</span>
+        {% endif %}
+      </div>
+      <div class="compare-side {% if winner == 'right' %}winner{% endif %}">
+        <div class="vname">{{ right_name }}</div>
+        <div class="vscore">{{ "%.2f"|format(right_weighted) }}<span class="denom"> / 5</span></div>
+        {% if winner == 'right' %}
+          <span class="badge badge-primary" style="margin-top: var(--s2);">Higher score</span>
+        {% endif %}
+      </div>
+    </section>
+
+    <details class="howto">
+      <summary>First time reading a comparison? Read this.</summary>
+      <p>
+        Both vendors were scored independently against the same 15-question rubric. This report is the difference layer on top.
+      </p>
+      <ul>
+        <li><strong>Scorecard side by side</strong> — three risk categories with each vendor's average and the gap (Δ) between them.</li>
+        <li><strong>Biggest differences</strong> — the 5 questions where the two vendors diverge most. Start here.</li>
+        <li><strong>Per-category breakdown</strong> — every question with both vendors' scores and reasoning stacked.</li>
+      </ul>
+      <p>
+        Δ (delta) is always <em>{{ left_name }} minus {{ right_name }}</em>. Positive numbers mean {{ left_name }} scores higher. Tie threshold is 0.25 points.
+      </p>
+    </details>
+
+    <div class="report-body">
+      {{ report_html|safe }}
+    </div>
+
+    <p class="method-note">
+      <span class="lead">About this comparison</span>
+      Both vendors were scored independently against the same rubric; this report is the
+      difference layer on top. As with the single-vendor reports, scores are produced by a
+      large language model and should accelerate, not replace, buyer judgement.
+    </p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,73 @@
+%% OpenAI Agents SDK — runtime architecture.
+%% Derived from src/agents/run.py (Runner / AgentRunner classes),
+%% src/agents/guardrail.py (InputGuardrail / OutputGuardrail tripwires),
+%% and the Agents SDK documentation at openai.github.io/openai-agents-python/.
+
+flowchart TB
+    User([User input])
+
+    subgraph SDK[Agents SDK runtime — Runner / AgentRunner]
+        InputGuardrails{Input guardrails<br/>run in parallel with model call<br/>tripwire_triggered halts execution}
+        Agent[Agent node<br/>calls model with instructions + tools<br/>via Responses API]
+
+        subgraph Tools[Tool execution layer]
+            FunctionTool[Function tool<br/>@function_tool decorator<br/>strict JSON Schema validated at decode time]
+            BuiltinTools[Built-in tools<br/>web_search / file_search<br/>code_interpreter / computer_use]
+            MCP[MCP server tool<br/>require_approval: never / once / always]
+        end
+
+        Decide{Did model emit tool_calls?<br/>Has max_turns been reached?}
+        TurnCounter[Turn counter<br/>current_turn += 1<br/>raises MaxTurnsExceeded if > max_turns]
+        Handoff[Handoff<br/>delegate to another agent<br/>preserves session state]
+        OutputGuardrails{Output guardrails<br/>parallel validation<br/>tripwire halts before final output}
+        Done([Final output<br/>RunResult])
+    end
+
+    subgraph State[State + observability]
+        Session[(Session<br/>cross-turn memory<br/>uses Responses API previous_response_id)]
+        Tracing[(Built-in tracing<br/>span tree<br/>OpenAI dashboard + custom exporters)]
+    end
+
+    subgraph OpenAIInfra[OpenAI infrastructure]
+        ResponsesAPI[(Responses API<br/>state persisted server-side<br/>strict mode constrains decoding)]
+        Sandbox[(Hosted sandboxes<br/>code interpreter container<br/>20-min sessions)]
+    end
+
+    User --> InputGuardrails
+    InputGuardrails -->|tripwire fires| Halt[Halt and return<br/>partial RunResult to caller]
+    InputGuardrails -->|pass| Agent
+
+    Agent --> ResponsesAPI
+    ResponsesAPI --> Agent
+
+    Agent --> TurnCounter
+    TurnCounter -->|exceeded| MaxTurnsErr[MaxTurnsExceeded<br/>or graceful synthesized output via error_handlers]
+    TurnCounter --> Decide
+
+    Decide -->|tool_calls| Tools
+    Tools --> Sandbox
+    Tools --> Agent
+    Decide -->|handoff| Handoff
+    Handoff --> Agent
+    Decide -->|done| OutputGuardrails
+
+    OutputGuardrails -->|tripwire fires| Halt
+    OutputGuardrails -->|pass| Done
+
+    Agent -.persists state.-> Session
+    Session -.context.-> Agent
+
+    InputGuardrails -.emit spans.-> Tracing
+    Agent -.emit spans.-> Tracing
+    Tools -.emit spans.-> Tracing
+    OutputGuardrails -.emit spans.-> Tracing
+    Handoff -.emit spans.-> Tracing
+
+    style InputGuardrails fill:#fef3c7,stroke:#b45309
+    style OutputGuardrails fill:#fef3c7,stroke:#b45309
+    style TurnCounter fill:#fef2f2,stroke:#b91c1c
+    style FunctionTool fill:#dbeafe,stroke:#2563eb
+    style ResponsesAPI fill:#dcfce7,stroke:#15803d
+    style Sandbox fill:#dcfce7,stroke:#15803d
+    style Halt fill:#fef2f2,stroke:#b91c1c
+    style MaxTurnsErr fill:#fef2f2,stroke:#b91c1c

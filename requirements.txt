@@ -1,0 +1,5 @@
+anthropic>=0.40.0
+pyyaml>=6.0
+pypdf>=4.0      # PDF text extraction; analyzer falls back gracefully if missing
+flask>=3.0      # web UI
+markdown>=3.5   # render the report markdown as HTML in the browser

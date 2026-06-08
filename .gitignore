@@ -1,0 +1,35 @@
+# Secrets — never commit
+.env
+.env.*
+*.key
+*secret*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Generated outputs (regenerated per run; not source of truth)
+runs/
+reports/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+~$*
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Project-local tool state
+.claude/
+/tmp/
+
+# Anything starting with an underscore is a stub / scratch
+reports/_stub_*

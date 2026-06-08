@@ -1,0 +1,58 @@
+%% Lumen Agents — high-level agent runtime architecture.
+%% Mermaid flowchart. Render at: https://mermaid.live
+
+flowchart TB
+    User([Ticket / user input]) --> Gate
+
+    subgraph Runtime[Agent Runtime — per-tenant process]
+        Gate[Input gate<br/>tag-as-untrusted<br/>strip-encoded-payloads]
+        Planner[Planner<br/>produces 1-N step plan<br/>+ predicted tool calls]
+        PlanValidator{Plan validator<br/>tool allowlist?<br/>step budget?<br/>approval gates wired?}
+        Executor[Step executor]
+        ToolValidator{Tool param validator<br/>JSON Schema 2020-12<br/>+ business rules<br/>+ FK existence}
+        DryRun[Dry-run mode<br/>write_high_risk + destructive<br/>tools default here]
+        ApprovalGate{Human approval gate<br/>amount > threshold?<br/>destructive?}
+        Tool[(Tool execution<br/>idempotency-keyed<br/>per-tenant egress proxy)]
+        StateStore[(Facts state JSON<br/>explicit, not implicit<br/>TTL'd per fact)]
+        Consistency{Consistency checker<br/>logical predicates<br/>over facts state}
+        Loop{Loop detector<br/>hash + embedding similarity<br/>state-hash unchanged}
+        BudgetMeter{Step / token / cost meters<br/>runtime hard limits}
+        Checkpointer[(Step checkpoint<br/>state hash + facts snapshot)]
+        Escalate[Escalate to human<br/>typed reason codes]
+    end
+
+    subgraph Observability[Observability & audit]
+        Trace[(Per-run trace<br/>immutable, signed, JSON)]
+        AuditLog[(Admin audit log<br/>signed, append-only)]
+        AlertRouter[Alert router<br/>email / Slack / PD / webhook]
+    end
+
+    Gate --> Planner
+    Planner --> PlanValidator
+    PlanValidator -->|reject| Escalate
+    PlanValidator -->|approve| Executor
+
+    Executor --> ToolValidator
+    ToolValidator -->|invalid| Executor
+    ToolValidator -->|valid| DryRun
+    DryRun --> ApprovalGate
+    ApprovalGate -->|approved| Tool
+    ApprovalGate -->|denied| Escalate
+    Tool --> StateStore
+    StateStore --> Consistency
+    StateStore --> Checkpointer
+    Consistency -->|contradiction| Escalate
+    Consistency -->|ok| Loop
+    Loop -->|loop| Escalate
+    Loop -->|ok| BudgetMeter
+    BudgetMeter -->|over| Escalate
+    BudgetMeter -->|under| Planner
+
+    Executor -.-> Trace
+    Tool -.-> Trace
+    StateStore -.-> Trace
+    Trace -.-> AlertRouter
+    AuditLog -.-> AlertRouter
+
+    Trace --> BuyerSiem[(Buyer SIEM<br/>S3 / Splunk / Sumo)]
+    AuditLog --> BuyerSiem

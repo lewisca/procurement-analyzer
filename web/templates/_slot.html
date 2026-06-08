@@ -1,0 +1,40 @@
+<div class="slot-card">
+  <div class="slot-head">
+    <div>
+      <div class="slot-name">{{ slot.name }}</div>
+      <div class="slot-meta">
+        {% if slot.required %}
+          <span class="badge badge-primary">Required</span>
+        {% else %}
+          <span class="badge badge-muted">Optional</span>
+        {% endif %}
+        <span class="format-pills">
+          {% for f in slot.formats %}<span class="format-pill">{{ f }}</span>{% endfor %}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  {% if slot.novice_explanation %}
+    <p class="slot-explain">{{ slot.novice_explanation }}</p>
+  {% elif slot.description %}
+    <p class="slot-explain">{{ slot.description }}</p>
+  {% endif %}
+
+  {% if slot.ask_vendor %}
+    <div class="ask-vendor">
+      <span class="lead">Ask your vendor</span>
+      {{ slot.ask_vendor }}
+    </div>
+  {% endif %}
+
+  {% if slot.example_snippet %}
+    <details class="example">
+      <summary>See an example file</summary>
+      <pre><code>{{ slot.example_snippet }}</code></pre>
+    </details>
+  {% endif %}
+
+  <input type="file" id="slot-{{ slot.id }}" name="slot-{{ slot.id }}"
+         accept="{{ slot.formats|join(',') }}" multiple>
+</div>

@@ -1,0 +1,328 @@
+version: 2
+name: "Agentic AI Vendor Evaluation — Horizontal Rubric"
+source_doc: "Agentic_AI_Vendor_Evaluation_Guide.docx"
+description: >
+  Buyer-side due diligence rubric focused on the three risk categories
+  unique to agentic AI: Tool-Call Correctness, Loop Termination / Step
+  Budgets, and Multi-Step State Coherence. 15 questions total
+  (3 categories × 5 questions), scored 1–5.
+
+  v2 changelog: Loop Termination questions (LT1, LT2, LT5) now credit
+  outcome-based pricing models and structural protections as valid
+  alternatives to buyer-facing budget dials. The risk being managed is
+  *buyer cost / SLA exposure to runaway agents*; multiple architectures
+  can mitigate that risk, not just visible per-execution caps.
+
+scoring_scale:
+  5:
+    name: "Fully Implemented"
+    description: "Optimal answers across the board; production examples or documentation; no red flags."
+  4:
+    name: "Substantial"
+    description: "Strong implementation on 4–5 of the 5 questions; minor gaps; no major red flags."
+  3:
+    name: "Partial"
+    description: "Optimal on 2–3 questions; significant gaps in 2+ areas; some red flags but not disqualifying."
+  2:
+    name: "Minimal"
+    description: "Optimal on 1–2 questions; multiple red flags; vague or evasive."
+  1:
+    name: "Not Addressed"
+    description: "Category not implemented; dismissive of the problem; major red flags."
+
+categories:
+  - id: tool_call_correctness
+    name: "Tool-Call Correctness"
+    risk: >
+      Agent misinterprets what a tool does and invokes it incorrectly.
+      In healthcare, wrong tool = wrong medication. In finance, wrong tool
+      = wire to wrong account. Real action + wrong tool = catastrophic.
+    weight: 1.0
+
+  - id: loop_termination
+    name: "Loop Termination / Step Budgets"
+    risk: >
+      Agent gets stuck in a reasoning or burn-through loop, exhausting
+      tokens / API calls / dollars. Costs explode, SLAs miss, resources
+      drain. Without hard limits and detection, agents can spiral.
+    weight: 1.0
+
+  - id: state_coherence
+    name: "Multi-Step State Coherence"
+    risk: >
+      Agent forgets facts established early on, or hallucinates facts
+      mid-execution and bases later steps on them. State drifts.
+      Contradictions cascade. Agent decides "user is high-risk" in step 2,
+      then processes their transaction in step 7.
+    weight: 1.0
+
+questions:
+  # === Tool-Call Correctness ===
+  - id: TC1
+    category: tool_call_correctness
+    question: "Walk me through how you prevent tool misinterpretation. Show me your validation layer."
+    optimal_answer:
+      - Typed schema validation (strict input type definitions for every tool)
+      - Validation happens before execution, not after
+      - Concrete example where an invalid parameter was rejected
+      - Explicit error handling if a tool is called incorrectly
+      - Articulates what happens if the LLM hallucinates a tool parameter
+    red_flags:
+      - "'We just call the tool and handle errors in the response' (too late — damage done)"
+      - Vague about validation or it's manual / ad-hoc
+      - No examples of failure cases they've caught
+    evidence_sources: [tool_schema, security_privacy, sample_trace, failure_modes]
+
+  - id: TC2
+    category: tool_call_correctness
+    question: "What happens when the agent selects the wrong tool? Is there retry / correction logic?"
+    optimal_answer:
+      - Tool-selection failure detection (agent realizes it called wrong tool)
+      - Automatic replanning — sees error, recalibrates, tries again
+      - Bounded retries (e.g. max 3 attempts, then escalate)
+      - Trace example where this happened and was corrected
+      - Circuit breaker — after N failures on same task, stop and alert humans
+    red_flags:
+      - "'We just return the error to the agent and let it figure it out' (infinite loop risk)"
+      - No mention of what happens after repeated failures
+      - Can't show a real example
+    evidence_sources: [sample_trace, failure_modes]
+
+  - id: TC3
+    category: tool_call_correctness
+    question: "Do you log which tool was called and with what parameters? Can the decision be audited?"
+    optimal_answer:
+      - Complete execution logs (timestamp, tool name, input params, output, selection reasoning)
+      - Immutable and exportable logs (pull into buyer's system)
+      - Replayable from logs
+      - LLM reasoning that led to tool selection is captured
+      - Structured logs (JSON), not text dumps
+    red_flags:
+      - Logs only show success, not failures
+      - Proprietary format you can't integrate with
+      - No reasoning trace (just "called tool X")
+      - Logs deleted after a short retention window
+    evidence_sources: [sample_trace, security_privacy]
+
+  - id: TC4
+    category: tool_call_correctness
+    question: "Have you tested against adversarial inputs that could trick tool selection?"
+    optimal_answer:
+      - Red-team testing or adversarial evaluation mentioned
+      - Concrete attack described (e.g. contradictory instructions)
+      - Documented known failure modes
+      - Mitigations for known adversarial patterns
+      - Transparent about attacks that still work
+    red_flags:
+      - "'We haven't really tested that'"
+      - "Dismissive of risk ('It won't happen in practice')"
+      - No framework for adversarial robustness
+    evidence_sources: [eval_report, failure_modes, security_privacy]
+
+  - id: TC5
+    category: tool_call_correctness
+    question: "Is there a 'dry-run' or simulation mode before real execution?"
+    optimal_answer:
+      - Sandbox / simulation mode exists
+      - Dry-run shows planned actions without executing them
+      - Buyer can inspect planned actions before they execute
+      - Available for high-risk operations (finance, healthcare, data deletion)
+      - Works for complex multi-step workflows
+    red_flags:
+      - "'No, but you can review logs after execution' (damage is done)"
+      - Dry-run exists but doesn't show planned actions
+      - Only available for simple operations, not complex workflows
+    evidence_sources: [overview, pricing_sla, sample_trace]
+
+  # === Loop Termination / Step Budgets ===
+  - id: LT1
+    category: loop_termination
+    question: "What is the maximum step / iteration limit? How is it enforced?"
+    optimal_answer:
+      - Hard, configurable step limit (e.g. max 25 steps per execution)
+      - Runtime enforcement (agent cannot bypass)
+      - Conservative default (not 1000)
+      - Adjustable per use case with a ceiling
+      - Graceful stop with clear messaging when limit is hit
+      - Can show what happens when an agent hits the limit
+      - "OR (acceptable alternative for managed platforms) the vendor operates a managed service with outcome-based pricing AND documented latency SLAs that structurally bound work per interaction — meaning runaway agents are economically infeasible for the vendor to ignore, even without a buyer-visible step dial. Credit equally."
+    red_flags:
+      - "'There's no limit, the agent just stops when it's done' (recipe for runaway)"
+      - Very high limit (1000+)
+      - Advisory limit — agent can request more
+      - No clear story on what happens at the limit
+      - "Note: 'no buyer-visible step limit' is NOT a red flag if the vendor uses outcome-based pricing or has documented SLA-bound per-interaction latency. Only flag when neither a visible cap NOR a structural protection exists."
+    evidence_sources: [overview, sample_trace, failure_modes, pricing_sla]
+
+  - id: LT2
+    category: loop_termination
+    question: "Can you set token budgets? What happens when they're hit?"
+    optimal_answer:
+      - Total token budget per execution can be set (e.g. max 10K)
+      - Real-time tracking of token spend
+      - Alerts / warnings as limit approaches
+      - Hard stop when limit is exceeded
+      - Cost budgets also supported (e.g. $1 max per execution)
+      - Granular breakdown (tokens per step, tool calls, reasoning)
+      - "OR (acceptable alternative for managed platforms) the vendor uses outcome-based pricing so that buyer token cost is structurally bounded — buyer pays $0 on unresolved interactions regardless of token spend. Token usage should still be observable post-hoc for analysis, but per-execution budgets are not required to score well. Credit equally."
+    red_flags:
+      - "'We don't track tokens granularly'"
+      - No ability to set limits AND no outcome-based pricing protection (i.e. buyer is on the hook for tokens with no cap)
+      - Soft limit — agent can exceed it
+      - No alerting
+      - Can't see where tokens were spent post-hoc (observability gap is real even under outcome pricing)
+    evidence_sources: [pricing_sla, sample_trace]
+
+  - id: LT3
+    category: loop_termination
+    question: "How do you prevent infinite loops? Is there loop detection?"
+    optimal_answer:
+      - Loop detection logic identifies repeated action / reasoning
+      - Examples — same tool 3x with same inputs, same question repeatedly, same state twice
+      - Automatic intervention when loop detected (break, replan, escalate)
+      - Real examples from logs where loops were caught
+      - Transparent mechanism (not a black box)
+    red_flags:
+      - "'We don't have explicit loop detection, just step limits' (step limits ≠ loop detection)"
+      - Reactive, not preventive
+      - Black box — you don't know how they detect
+      - Can't point to real examples
+    evidence_sources: [failure_modes, sample_trace, eval_report]
+
+  - id: LT4
+    category: loop_termination
+    question: "Do you provide detailed logging of every step? Can I see tokens / cost spent?"
+    optimal_answer:
+      - Every step logged with step number, action, input, output, tokens, time, reasoning
+      - Human-readable AND machine-parseable
+      - Cost breakdown visible (tokens × price = cost)
+      - Logs include errors, retries, intermediate states
+      - Exportable / queryable (filter, search, aggregate)
+      - Real execution trace easy to follow
+    red_flags:
+      - Logs are sparse or high-level only
+      - No token / cost breakdown
+      - Unstructured or hard to parse
+      - Can't export / query
+      - Short retention
+    evidence_sources: [sample_trace, security_privacy]
+
+  - id: LT5
+    category: loop_termination
+    question: "Can you set cost caps per execution? Are you alerted?"
+    optimal_answer:
+      - Dollar limit per execution (e.g. $0.10 max)
+      - Real-time spend tracking
+      - Alerts at 80% of budget
+      - Hard stop when cap exceeded
+      - Transparent cost accounting
+      - Works across multiple tool calls and LLM invocations
+      - "OR (acceptable alternative for managed platforms) the vendor uses outcome-based or success-fee pricing such that per-execution buyer cost is structurally bounded regardless of agent behavior. Loopiness becomes the VENDOR's economic problem, not the buyer's. Credit equally — the rubric asks about buyer protection, not about which mechanism provides it."
+    red_flags:
+      - No cost-cap feature AND no outcome-based / capped pricing (buyer is exposed to uncapped cost)
+      - Cap is per call, not per execution (10 calls × $0.10 = $1)
+      - Alerts are post-execution
+      - Opaque cost accounting that prevents post-hoc analysis (even under outcome pricing, buyers want to see what their agent did)
+    evidence_sources: [pricing_sla, sample_trace]
+
+  # === Multi-Step State Coherence ===
+  - id: SC1
+    category: state_coherence
+    question: "How do you maintain context across 5+ steps? Show me a long execution trace."
+    optimal_answer:
+      - 5–10 step execution that is coherent end-to-end
+      - Agent remembers facts established in step 1 when deciding in step 8
+      - No context degradation (summarization / memory / windowing managed well)
+      - Explicit strategy for long-horizon tasks
+    red_flags:
+      - Only 2–3 step examples
+      - "Agent 'forgets' facts from early steps"
+      - Tiny context window
+      - Vague on long context strategy
+      - Quality degradation toward the end of traces
+    evidence_sources: [sample_trace, overview]
+
+  - id: SC2
+    category: state_coherence
+    question: "How do you detect contradictions? (Agent decides X in step 2, contradicts it in step 7)"
+    optimal_answer:
+      - Consistency-checking logic built in
+      - Example — "user is high-risk in step 2" then transaction processed in step 7 flagged
+      - Automated detection (not manual review) in step 7 referencing step 2 decisions
+      - Examples of caught contradictions
+      - Resolution mechanism (replan, escalate, correct)
+      - Logs show the contradiction and its handling
+    red_flags:
+      - "'We haven't thought about this'"
+      - No automated detection — relies on human review
+      - Contradictions happen, nobody catches them
+      - Can't show examples
+      - "'Agents are good at not contradicting themselves' (naive)"
+    evidence_sources: [sample_trace, failure_modes, eval_report]
+
+  - id: SC3
+    category: state_coherence
+    question: "Is there state validation / checkpointing at each step?"
+    optimal_answer:
+      - Checkpoint at each step — complete state (facts, decisions, open tasks) saved
+      - State validation rules check logical consistency at each checkpoint
+      - Inspectable intermediate state (what does the agent know now?)
+      - Replayable — could resume from any checkpoint if interrupted
+      - State is explicit and queryable, not hidden in context window
+    red_flags:
+      - No checkpointing — state implicit in context window
+      - No consistency validation
+      - Can't inspect intermediate state
+      - Not replayable
+      - State lives only in memory
+    evidence_sources: [sample_trace, security_privacy]
+
+  - id: SC4
+    category: state_coherence
+    question: "What happens if the agent hallucinates a fact mid-execution and bases later steps on it?"
+    optimal_answer:
+      - Hallucination detection — catches references to facts not established earlier
+      - Example — agent says 'we confirmed address was 123 Main St' but never did → flagged
+      - Correction mechanism (re-verify or escalate)
+      - Examples where caught
+      - Logs show the hallucination and correction
+      - Preventive strategy (agent must cite sources for facts)
+    red_flags:
+      - "'We don't have specific detection for this'"
+      - Only caught in post-execution review
+      - No way to prevent cascading hallucinations
+      - Can't show examples
+      - "Assumption is 'hallucinations won't happen'"
+    evidence_sources: [failure_modes, sample_trace, eval_report]
+
+  - id: SC5
+    category: state_coherence
+    question: "Can you export the full execution state for debugging?"
+    optimal_answer:
+      - Complete state export in standard format (JSON)
+      - Includes facts known, decisions, steps, tool calls, reasoning, contradictions, per-step state
+      - Reproducible — can replay execution from exported state
+      - Useful for post-mortem (why did it fail? where did state go wrong?)
+      - Loadable into buyer's debugging tools or visualization
+    red_flags:
+      - Can't export state
+      - Export is proprietary or unreadable
+      - Incomplete (missing reasoning or intermediate facts)
+      - Not reproducible
+      - State locked in vendor's system
+    evidence_sources: [sample_trace, security_privacy]
+
+# Vertical extension hooks — layer on top of horizontal questions for
+# domain-specific due diligence. Not scored by default in v1.
+extensions:
+  maternal_health_clinical:
+    name: "Maternal Health / Clinical AI Extension"
+    questions:
+      - id: M1
+        question: "Is a HIPAA BAA in place and is PHI handling documented end-to-end?"
+      - id: M2
+        question: "Has the vendor evaluated demographic fairness (race, age, language, SES)?"
+      - id: M3
+        question: "What is the vendor's FDA SaMD posture — is the agent a regulated medical device?"
+      - id: M4
+        question: "Is there clinical validation evidence (study, comparison to standard of care)?"

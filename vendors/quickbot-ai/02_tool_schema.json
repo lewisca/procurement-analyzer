@@ -1,0 +1,59 @@
+{
+  "name": "QuickBot Tools",
+  "version": "0.4",
+  "notes": "These are the tools our agent has access to. Configure in the dashboard.",
+  "tools": [
+    {
+      "name": "lookup_order",
+      "description": "Look up an order.",
+      "params": {
+        "order_id": "string"
+      }
+    },
+    {
+      "name": "lookup_customer",
+      "description": "Get customer info.",
+      "params": {
+        "query": "string (email or name)"
+      }
+    },
+    {
+      "name": "search_help_docs",
+      "description": "Search help articles.",
+      "params": {
+        "q": "string"
+      }
+    },
+    {
+      "name": "refund",
+      "description": "Issue a refund.",
+      "params": {
+        "order_id": "string",
+        "amount": "number"
+      }
+    },
+    {
+      "name": "update_address",
+      "description": "Change shipping address.",
+      "params": {
+        "order_id": "string",
+        "address": "string"
+      }
+    },
+    {
+      "name": "cancel_subscription",
+      "description": "Cancel a subscription.",
+      "params": {
+        "customer_id": "string"
+      }
+    },
+    {
+      "name": "send_email",
+      "description": "Send a reply to the customer.",
+      "params": {
+        "to": "string",
+        "body": "string"
+      }
+    }
+  ]
+}

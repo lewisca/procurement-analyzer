@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Procurement Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="app-header">
+    <a href="{{ url_for('index') }}" class="brand">
+      <span class="brand-mark">PA</span>
+      Procurement Analyzer
+    </a>
+    <nav class="app-nav">
+      <a href="{{ url_for('runs_route') }}">Saved analyses</a>
+      <a href="{{ url_for('compare_form') }}">Compare</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card card-hero hero">
+      <h1>Procurement-grade evaluation for agentic AI vendors</h1>
+      <p class="tagline">
+        Drop a vendor's documents. Get back a structured report scored
+        against a 15-question rubric covering tool-call correctness, loop
+        termination, and multi-step state coherence — the three risk
+        categories unique to agentic AI.
+      </p>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="num">{{ question_count }}</span>
+          <span class="lbl">rubric questions</span>
+        </div>
+        <div class="hero-stat">
+          <span class="num">3</span>
+          <span class="lbl">risk categories</span>
+        </div>
+        <div class="hero-stat">
+          <span class="num">14</span>
+          <span class="lbl">artifact types accepted</span>
+        </div>
+        <div class="hero-stat">
+          <span class="num">~45s</span>
+          <span class="lbl">typical analysis time</span>
+        </div>
+      </div>
+    </section>
+
+    <details class="howto">
+      <summary>First time here? How to use this in 30 seconds.</summary>
+      <p>
+        Each upload slot below has three things to help you:
+      </p>
+      <ul>
+        <li><strong>Plain-English explanation</strong> of what the artifact is and why it matters.</li>
+        <li><strong>An "Ask your vendor" sentence</strong> you can copy into an email to request the file.</li>
+        <li><strong>A worked example</strong> (click to expand) so you can recognize a good file when you see it.</li>
+      </ul>
+      <p>
+        Upload whatever you have. <strong>Required</strong> slots are foundational; <strong>optional</strong> slots improve the analysis but won't block it. The analyzer accepts <code>.md</code>, <code>.pdf</code>, <code>.json</code>, <code>.yaml</code>, code files, and Mermaid diagrams.
+      </p>
+    </details>
+
+    <form action="{{ url_for('analyze_route') }}" method="post" enctype="multipart/form-data" id="upload-form" class="stack">
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Vendor</h2>
+            <p class="card-sub">This name appears on the report header and as the filename for download.</p>
+          </div>
+        </div>
+        <div class="field mb-0">
+          <label for="vendor_name">Vendor name</label>
+          <input type="text" id="vendor_name" name="vendor_name" placeholder="e.g. Lumen Agents" required>
+        </div>
+      </section>
+
+      <section class="card" style="border-left: 4px solid var(--primary);">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Quick upload &mdash; pick everything at once</h2>
+            <p class="card-sub">
+              If your vendor docs are in one folder, pick them all here. We'll
+              auto-route each file to the right slot by filename. Use the per-slot
+              uploads below if you want fine control.
+            </p>
+          </div>
+        </div>
+        <div class="field mb-0">
+          <p class="field-hint" style="margin: 0 0 var(--s2);">
+            <strong>Tip:</strong> in the file picker, shift-click (or Ctrl+A) to
+            select all files in your vendor folder, then click Open. There's no
+            format filter on this input, so every file in the folder will be
+            selectable.
+          </p>
+          <input type="file" id="bulk-upload" name="bulk-upload" multiple>
+          <div class="field-hint" id="bulk-upload-count" style="margin-top: var(--s2); color: var(--primary); font-weight: 500;"></div>
+        </div>
+      </section>
+
+      <div class="section-header">
+        <h2>Or fill specific slots</h2>
+        <span class="section-sub">{{ required|length }} required · {{ optional|length }} optional · auto-detected formats</span>
+      </div>
+
+      <div class="section-header" style="margin-top: var(--s3);">
+        <h2>Required artifacts</h2>
+        <span class="section-sub">{{ required|length }} slots · foundational evidence</span>
+      </div>
+      <div class="slot-grid">
+        {% for slot in required %}{% include '_slot.html' %}{% endfor %}
+      </div>
+
+      <div class="section-header">
+        <h2>Optional artifacts</h2>
+        <span class="section-sub">{{ optional|length }} slots · improves the analysis</span>
+      </div>
+      <div class="slot-grid">
+        {% for slot in optional %}{% include '_slot.html' %}{% endfor %}
+      </div>
+
+      {% if ignored %}
+        <div class="section-header">
+          <h2>Marketing collateral</h2>
+          <span class="section-sub">accepted but ignored by the analyzer</span>
+        </div>
+        <div class="slot-grid">
+          {% for slot in ignored %}{% include '_slot.html' %}{% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="card" style="text-align:center; padding: var(--s5);">
+        <button type="submit" class="btn btn-primary btn-lg">Analyze vendor</button>
+        <div id="loading" class="loading">
+          Analyzing — typical time 30 to 60 seconds. Please don't close this tab.
+        </div>
+      </div>
+    </form>
+
+    <p class="method-note">
+      <span class="lead">Methodology</span>
+      Rubric: {{ rubric_name }}. Scores are generated by a large language model evaluating
+      uploaded artifacts against a structured 15-question framework with named optimal-answer
+      signals and red flags. Reports are intended to accelerate, not replace, buyer judgement;
+      verify cited evidence against the source files before acting.
+    </p>
+  </main>
+
+  <script>
+    document.getElementById('upload-form').addEventListener('submit', function () {
+      document.getElementById('loading').style.display = 'block';
+      var btn = this.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Working...';
+    });
+
+    // Bulk-upload file count feedback
+    document.getElementById('bulk-upload').addEventListener('change', function () {
+      var count = this.files.length;
+      var msg = document.getElementById('bulk-upload-count');
+      if (count === 0) {
+        msg.textContent = '';
+      } else {
+        var names = [];
+        for (var i = 0; i < this.files.length && i < 4; i++) {
+          names.push(this.files[i].name);
+        }
+        var preview = names.join(', ');
+        if (count > 4) preview += ', ... +' + (count - 4) + ' more';
+        msg.textContent = '✓ ' + count + ' file' + (count === 1 ? '' : 's') +
+                          ' selected (' + preview + '). They will be auto-routed to matching slots on submit.';
+      }
+    });
+  </script>
+</body>
+</html>

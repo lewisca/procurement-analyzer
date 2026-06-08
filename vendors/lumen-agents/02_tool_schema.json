@@ -1,0 +1,155 @@
+{
+  "schema_version": "lumen.tools.v3",
+  "description": "Tool definitions exposed to the agent for the 'customer support automation' use case. Every tool has typed parameters, validation rules, and an explicit destructiveness classification.",
+  "validation_layer": {
+    "stage": "pre_execution",
+    "strategy": "JSON Schema 2020-12 validation + custom business-rule validators",
+    "on_validation_failure": "tool call rejected, agent receives structured error, replan triggered",
+    "example_rejected_call": {
+      "tool": "issue_refund",
+      "params": {"order_id": "ORD-12345", "amount_cents": "fifty dollars"},
+      "rejected_reason": "amount_cents must be integer >= 0; received string 'fifty dollars'",
+      "agent_followup": "replanned step 4 with corrected typed parameter"
+    }
+  },
+  "destructiveness_levels": {
+    "read_only": "no side effects; auto-execute",
+    "write_low_risk": "auto-execute; logged",
+    "write_high_risk": "requires human approval gate; defaults to dry-run",
+    "destructive": "requires human approval gate; never auto-executes"
+  },
+  "tools": [
+    {
+      "name": "get_order",
+      "destructiveness": "read_only",
+      "description": "Look up order by ID.",
+      "params": {
+        "type": "object",
+        "required": ["order_id"],
+        "properties": {
+          "order_id": {"type": "string", "pattern": "^ORD-[0-9]{5,10}$"}
+        }
+      }
+    },
+    {
+      "name": "get_customer",
+      "destructiveness": "read_only",
+      "description": "Look up customer record by ID or email.",
+      "params": {
+        "type": "object",
+        "oneOf": [
+          {"required": ["customer_id"]},
+          {"required": ["email"]}
+        ],
+        "properties": {
+          "customer_id": {"type": "string", "pattern": "^CUST-[0-9]+$"},
+          "email": {"type": "string", "format": "email"}
+        }
+      }
+    },
+    {
+      "name": "search_kb",
+      "destructiveness": "read_only",
+      "description": "Search the buyer's knowledge base.",
+      "params": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": {"type": "string", "minLength": 3, "maxLength": 500}
+        }
+      }
+    },
+    {
+      "name": "issue_refund",
+      "destructiveness": "write_high_risk",
+      "description": "Issue a refund against an order.",
+      "approval_gate": {
+        "auto_approve_if": "amount_cents <= 10000 AND customer.risk_score < 0.3",
+        "otherwise": "human_approval_required"
+      },
+      "idempotency": "required; client-provided idempotency_key dedupes within 24h",
+      "params": {
+        "type": "object",
+        "required": ["order_id", "amount_cents", "reason_code", "idempotency_key"],
+        "properties": {
+          "order_id": {"type": "string", "pattern": "^ORD-[0-9]{5,10}$"},
+          "amount_cents": {"type": "integer", "minimum": 0, "maximum": 100000000},
+          "reason_code": {"type": "string", "enum": [
+            "duplicate_charge", "item_not_received", "defective_item",
+            "wrong_item_shipped", "customer_request", "fraud_chargeback", "other"
+          ]},
+          "idempotency_key": {"type": "string", "pattern": "^[a-f0-9-]{36}$"}
+        }
+      }
+    },
+    {
+      "name": "update_shipping_address",
+      "destructiveness": "write_high_risk",
+      "description": "Update a customer's shipping address on a not-yet-shipped order.",
+      "approval_gate": {
+        "auto_approve_if": "order.status == 'pending' AND change_within_24h_count == 0",
+        "otherwise": "human_approval_required"
+      },
+      "params": {
+        "type": "object",
+        "required": ["order_id", "new_address"],
+        "properties": {
+          "order_id": {"type": "string"},
+          "new_address": {"type": "object", "required": ["street", "city", "country"]}
+        }
+      }
+    },
+    {
+      "name": "close_account",
+      "destructiveness": "destructive",
+      "description": "Initiate account closure. Never auto-approves.",
+      "approval_gate": {
+        "auto_approve_if": "never",
+        "otherwise": "human_approval_required"
+      },
+      "params": {
+        "type": "object",
+        "required": ["customer_id", "reason_code", "confirmation_phrase"],
+        "properties": {
+          "customer_id": {"type": "string"},
+          "reason_code": {"type": "string"},
+          "confirmation_phrase": {"type": "string", "const": "CONFIRM_CLOSE_ACCOUNT"}
+        }
+      }
+    },
+    {
+      "name": "escalate_to_human",
+      "destructiveness": "write_low_risk",
+      "description": "Hand off the ticket to a human agent with full context.",
+      "params": {
+        "type": "object",
+        "required": ["ticket_id", "reason", "summary"],
+        "properties": {
+          "ticket_id": {"type": "string"},
+          "reason": {"type": "string", "enum": [
+            "out_of_scope", "policy_exception_needed", "agent_low_confidence",
+            "contradiction_detected", "loop_detected", "budget_exceeded",
+            "destructive_action_blocked", "customer_requested_human"
+          ]},
+          "summary": {"type": "string", "minLength": 20}
+        }
+      }
+    }
+  ],
+  "dry_run_mode": {
+    "enabled_for": ["write_low_risk", "write_high_risk", "destructive"],
+    "behavior": "Tool returns the response that would have been produced; no side effects occur. Buyer-configurable to require dry-run before live execution on any high-risk action.",
+    "example_use": "Refund flows in finance/healthcare verticals default to dry-run; CSM reviews planned action before approving live execution."
+  },
+  "adversarial_test_suite": {
+    "location": "internal repo: lumen/tests/adversarial",
+    "categories": [
+      "Prompt injection from KB content",
+      "Contradictory instructions in user message",
+      "Tool-parameter hallucination (e.g. fake order IDs)",
+      "Privilege escalation attempts via reason_code",
+      "Looping attempts (repeat same tool call)"
+    ],
+    "cadence": "Run on every model upgrade and weekly on main."
+  }
+}

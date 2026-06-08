@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Error — Procurement Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="app-header">
+    <a href="{{ url_for('index') }}" class="brand">
+      <span class="brand-mark">PA</span>
+      Procurement Analyzer
+    </a>
+    <nav class="app-nav">
+      <a href="{{ url_for('index') }}" class="primary">Home</a>
+    </nav>
+  </header>
+
+  <main class="container container-narrow">
+    <div class="error-card">
+      <h2>Something went wrong</h2>
+      <p>{{ message }}</p>
+      <p style="margin-top: var(--s4);"><a href="{{ url_for('index') }}" class="btn btn-secondary">Back to home</a></p>
+    </div>
+  </main>
+</body>
+</html>

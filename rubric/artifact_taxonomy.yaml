@@ -1,0 +1,429 @@
+version: 2
+name: "Vendor Artifact Taxonomy"
+description: >
+  Canonical list of artifact types a buyer should request from an
+  agentic-AI vendor. Drives (a) the analyzer's evidence routing, and
+  (b) the UI's upload-slot rendering. Each slot tells the user what
+  to ask the vendor for and shows a short example of what the file
+  typically looks like.
+
+slots:
+  - id: overview
+    name: "Product overview"
+    formats: [".md", ".markdown", ".pdf", ".txt"]
+    required: true
+    description: "The vendor's plain-English description of what the agent does."
+    novice_explanation: >
+      The vendor's data sheet or 1-pager. Tells you the agent's use case,
+      what tasks it performs, and (crucially) what it does NOT do. If a
+      vendor can't write 1-2 pages bounding their own product, that's a
+      signal.
+    ask_vendor: >
+      "Please send your product overview, 1-pager, or data sheet — something
+      I can read in 5 minutes that tells me what your agent does, what it
+      doesn't do, and the kinds of tasks it handles."
+    example_filenames: ["overview.md", "datasheet.pdf", "product.md"]
+    example_snippet: |
+      # Lumen Agents — Product Overview
+
+      ## What we do
+      Lumen Agents is an agentic AI platform for customer support
+      automation. Our agents handle Tier-1 support tickets end-to-end:
+      ticket triage, information lookup, refund processing, account
+      modification, and escalation.
+
+      ## What we do not do
+      - We do not make creative, judgment-heavy decisions (e.g. legal
+        advice, medical triage, hiring decisions).
+      - We do not take destructive actions without an explicit human
+        approval gate.
+
+  - id: tool_schema
+    name: "Tool / function schemas"
+    formats: [".json", ".yaml", ".yml"]
+    required: true
+    description: "JSON Schema (or equivalent) for every tool the agent can call."
+    novice_explanation: >
+      An agent acts by calling tools — "look up an order", "issue a refund",
+      "send an email". Each tool has parameters with strict types. The
+      schema is the contract: what the tool is called, what arguments it
+      takes, what values are allowed, and which tools are destructive
+      (capable of real-world side effects). A good schema lists types,
+      required vs. optional fields, allowed values (enums), pattern
+      constraints, and a destructiveness classification.
+    ask_vendor: >
+      "Please send the JSON Schema (or OpenAPI / Pydantic equivalent) for
+      the tools your agent can call. I specifically want to see (a) the
+      typed parameters and constraints, (b) which tools are destructive,
+      (c) which require human approval, and (d) any idempotency keys."
+    example_filenames: ["tool_schema.json", "tools.json", "functions.yaml"]
+    example_snippet: |
+      {
+        "name": "issue_refund",
+        "destructiveness": "write_high_risk",
+        "approval_gate": {
+          "auto_approve_if": "amount_cents <= 10000 AND customer.risk_score < 0.3",
+          "otherwise": "human_approval_required"
+        },
+        "idempotency": "required; client-provided idempotency_key dedupes within 24h",
+        "params": {
+          "type": "object",
+          "required": ["order_id", "amount_cents", "reason_code", "idempotency_key"],
+          "properties": {
+            "order_id": {"type": "string", "pattern": "^ORD-[0-9]{5,10}$"},
+            "amount_cents": {"type": "integer", "minimum": 0, "maximum": 100000000},
+            "reason_code": {"type": "string", "enum": ["duplicate_charge", "item_not_received", "..."]}
+          }
+        }
+      }
+
+  - id: sample_trace
+    name: "Sample execution trace"
+    formats: [".json", ".ndjson"]
+    required: true
+    description: "Step-by-step record of one agent run."
+    novice_explanation: >
+      A trace records one run of the agent end-to-end: the agent's
+      reasoning at each step, which tool it called, what parameters it
+      passed, what came back, and how many tokens / how much money the
+      step used. A good trace makes the agent auditable — without one,
+      you can't tell why the agent did what it did.
+    ask_vendor: >
+      "Please send a trace from one real (or representative) agent run.
+      Ideally something 5+ steps long, including reasoning, tool calls
+      with parameters and outputs, per-step token / cost / latency,
+      and any consistency or loop signals you track."
+    example_filenames: ["sample_trace.json", "trace.json", "run.json"]
+    example_snippet: |
+      {
+        "step": 3,
+        "action_type": "tool_call",
+        "tool": "get_order",
+        "input": {"order_id": "ORD-77129834"},
+        "input_validation": "passed",
+        "output": {"order_id": "ORD-77129834", "amount_cents": 24500, "status": "delivered"},
+        "checkpoint": {
+          "facts_added": ["order.id", "order.amount_cents", "order.status"],
+          "contradiction_check": "Ticket asserts 'item never arrived' but order.tracking_proof_of_delivery == true. FLAG."
+        },
+        "tokens": {"in": 514, "out": 142},
+        "cost_usd": 0.0028,
+        "elapsed_ms": 2103
+      }
+
+  - id: failure_modes
+    name: "Failure-mode / red-team report"
+    formats: [".md", ".pdf"]
+    required: true
+    description: "Named ways the agent can fail, with rates and mitigations."
+    novice_explanation: >
+      The single most useful artifact for buyer due diligence. A mature
+      vendor publishes the specific ways their agent fails (wrong tool
+      selected, infinite loop, hallucinated fact, etc.), how often each
+      happens in production, and what they do to detect and mitigate
+      each. Vendors who brush this off as "the model is reliable" are
+      not ready.
+    ask_vendor: >
+      "Please send your failure-mode or reliability doc. I want named
+      failure modes (e.g. 'agent calls wrong tool', 'agent gets stuck
+      in a loop'), observed rates if you have them, and your detection
+      and mitigation strategy for each."
+    example_filenames: ["failure_modes.md", "red_team.md", "reliability.pdf"]
+    example_snippet: |
+      ### 1.1 Hallucinated tool name (FM-TC-001)
+
+      Example: Agent emits {"tool": "refund_order"} instead of
+      "issue_refund".
+
+      - Observed rate: 0.06% of agent steps (down from 0.42% pre-Dec 2025).
+      - Detection: Tool dispatcher rejects unknown tool names at the
+        validation layer before execution.
+      - Mitigation: Structured error returned to agent; agent replans;
+        bounded to 3 retries per step; circuit-breaker escalates after 3.
+
+  - id: security_privacy
+    name: "Security & privacy"
+    formats: [".md", ".pdf"]
+    required: true
+    description: "How your data is handled, who can access it, and what's certified."
+    novice_explanation: >
+      Covers encryption (in transit, at rest), data retention, whether
+      your data trains the vendor's models, certifications (SOC 2, ISO
+      27001, HIPAA, GDPR), access controls (SSO, RBAC, MFA), and
+      sub-processors. If you're in a regulated industry, this is the
+      doc you'll forward to your security & legal teams.
+    ask_vendor: >
+      "Please send your security and privacy documentation. I'm looking
+      for: encryption in transit and at rest, data retention defaults,
+      whether buyer data trains your models, certifications (SOC 2,
+      ISO 27001, HIPAA BAA, GDPR), and access controls (SSO, RBAC).
+      SOC 2 report under NDA is fine."
+    example_filenames: ["security_privacy.md", "trust.pdf"]
+    example_snippet: |
+      ## Data handling
+      - Encryption in transit: TLS 1.3 minimum.
+      - Encryption at rest: AES-256-GCM, customer-managed keys (BYOK)
+        on Enterprise.
+      - Training use: Buyer data is never used to train Lumen's models
+        or any third-party model. This is contractual; see DPA §4.
+      - Retention defaults: Agent traces 365 days (configurable down
+        to 30); buyer-uploaded KB retained until deleted.
+      - Deletion: Buyer-triggered deletion completes within 30 days.
+
+  - id: audit_log
+    name: "Sample audit log entries"
+    formats: [".json", ".ndjson", ".txt"]
+    required: false
+    description: "Admin / governance log entries — what flows into your SIEM."
+    novice_explanation: >
+      Different from the agent execution trace. These are the records
+      of administrative actions: who logged in, who changed config,
+      who approved a refund, who exported data. The kind of records
+      that flow into your security team's SIEM and that compliance
+      will ask for during an audit.
+    ask_vendor: >
+      "Please send a few sample audit log entries — what a single admin
+      action looks like when logged. Include things like login, config
+      change, role change, key rotation, approval granted, and export."
+    example_filenames: ["audit_log_sample.ndjson", "audit_sample.json"]
+    example_snippet: |
+      {"ts":"2026-04-22T13:53:48.001Z","tenant_id":"acme_retail_prod",
+       "actor_id":"u_jane.doe@acme.example","actor_role":"admin",
+       "action":"config.update","resource":"budget.cost_cap_usd",
+       "before":0.25,"after":0.50,"sig":"b3d2…0e8a"}
+      {"ts":"2026-04-22T14:08:31.114Z","tenant_id":"acme_retail_prod",
+       "actor_id":"agent_lead_42","action":"approval.granted",
+       "resource":"trace:trc_01HXYZK7P4Q9N2M3R8V5W6T1JF",
+       "decision":"approve","sig":"e91f…4c0a"}
+
+  - id: state_export
+    name: "Agent state export"
+    formats: [".json"]
+    required: false
+    description: "Export of the agent's facts state from a real run."
+    novice_explanation: >
+      A snapshot of the agent's "memory" during a run: the facts it
+      established, the decisions it made, the per-step checkpoints.
+      Used to verify the agent isn't losing track of facts across a
+      long run, and that runs can be replayed for debugging. If the
+      vendor can't export this, the agent's state is locked in their
+      system.
+    ask_vendor: >
+      "Please send a state export from one of your sample runs. I'm
+      checking for: explicit fact tracking with source-step citations,
+      per-step checkpoints, and whether the export can be loaded back
+      in to replay the run."
+    example_filenames: ["state_export.json", "facts_state.json"]
+    example_snippet: |
+      {
+        "trace_id": "trc_01HXYZK7P4Q9N2M3R8V5W6T1JF",
+        "facts": [
+          {"key": "customer.id", "value": "CUST-447712",
+           "source_step": 2, "source_tool": "get_customer"},
+          {"key": "customer.risk_score", "value": 0.18,
+           "source_step": 2, "ttl_seconds": 3600}
+        ],
+        "checkpoints": [
+          {"step": 2, "state_hash": "sha256:9c8a...0e1f", "facts_count_at_step": 4},
+          {"step": 3, "state_hash": "sha256:1f04...d2a8", "facts_count_at_step": 8}
+        ]
+      }
+
+  - id: configuration
+    name: "Configuration documentation"
+    formats: [".yaml", ".yml", ".json", ".md"]
+    required: false
+    description: "The knobs a buyer can turn — budgets, limits, alerts, roles."
+    novice_explanation: >
+      The "what can I configure?" reference. Should cover step / token
+      / cost budgets, retention windows, approval thresholds, allowed
+      tools (allowlist), RBAC roles, alert routes, and SSO. Without
+      this you're relying on the vendor's defaults — which may be
+      far too generous (e.g. no hard step limit at all).
+    ask_vendor: >
+      "Please send your default tenant configuration or settings
+      reference. I want to see what is configurable — budgets, retention,
+      approval rules, RBAC, tool allowlists, alert routes — and what
+      the defaults are out of the box."
+    example_filenames: ["configuration.yaml", "tenant_config.yaml", "settings.md"]
+    example_snippet: |
+      budgets:
+        step_limit:
+          default: 25
+          max_allowed: 50
+          enforcement: "runtime_hard"      # not advisory
+        token_budget_per_run:
+          default: 20000
+          alert_pct: 80
+          hard_stop_pct: 100
+        cost_cap_per_run_usd:
+          default: 0.25
+          alert_pct: 80
+          hard_stop_pct: 100
+
+  - id: evaluation
+    name: "Evaluation report"
+    formats: [".md", ".pdf"]
+    required: false
+    description: "Quantitative results on representative tasks, plus methodology."
+    novice_explanation: >
+      Numbers, not adjectives. Should give you: success rate on
+      representative tasks, average cost, average latency, and how
+      these were measured (datasets, judges, version history).
+      Adversarial / red-team results (attempts to trick the agent)
+      are extra-valuable. Marketing claims of "99% accuracy" without
+      methodology are a red flag.
+    ask_vendor: >
+      "Please send your latest eval report. I want numeric results on
+      representative tasks (success rate, cost, latency), the methodology
+      (datasets, judges, version history), and adversarial / red-team
+      results if you have them."
+    example_filenames: ["eval_report.md", "benchmark.md"]
+    example_snippet: |
+      | Use case                         | Success rate | Avg cost |
+      |----------------------------------|--------------|----------|
+      | Order status lookup              | 99.4%        | $0.011   |
+      | Refund (under $100)              | 97.1%        | $0.028   |
+      | Refund (over $100, w/ approval)  | 96.3%        | $0.043   |
+
+      Adversarial suite: 304 / 312 attacks caught (97.4%). The 8 misses
+      are categorized and have open fixes in our backlog.
+
+  - id: architecture
+    name: "Architecture diagram"
+    formats: [".mmd", ".png", ".pdf", ".svg"]
+    required: false
+    description: "How the pieces fit together — planner, tools, state, audit."
+    novice_explanation: >
+      A diagram of the agent system. Should show planner, tool
+      dispatcher, validation layer, state store, approval gates,
+      observability. Mermaid (.mmd) is text and the analyzer reads
+      it directly. PNG / PDF / SVG you'd review separately.
+    ask_vendor: >
+      "Please send an architecture diagram of your agent system —
+      Mermaid text preferred (so I can read it), PNG / PDF accepted.
+      I want to see how planner, validator, tool dispatch, state store,
+      and observability fit together."
+    example_filenames: ["architecture.mmd", "diagram.png"]
+    example_snippet: |
+      flowchart TB
+        User --> Gate
+        Gate --> Planner
+        Planner --> PlanValidator
+        PlanValidator -->|approve| Executor
+        Executor --> ToolValidator
+        ToolValidator -->|valid| DryRun
+        DryRun --> ApprovalGate
+        ApprovalGate -->|approved| Tool
+        Tool --> StateStore
+        StateStore --> Consistency
+        Consistency -->|ok| Loop
+        Loop -->|ok| BudgetMeter
+        BudgetMeter -->|under| Planner
+
+  - id: tool_implementation
+    name: "Tool implementation (code)"
+    formats: [".py", ".ts", ".js", ".go", ".java", ".rb"]
+    required: false
+    description: "Actual source code for one or two of the agent's tools."
+    novice_explanation: >
+      Code rarely lies. If the vendor claims validation runs before
+      every tool call, the code shows whether that's true. Especially
+      valuable for destructive tools (refund, account closure).
+      Usually shared under NDA.
+    ask_vendor: >
+      "Under NDA, please share the source for one or two representative
+      tools — ideally a destructive one (refund, account closure).
+      I'm specifically looking for: input validation before any side
+      effect, idempotency handling, and how approval gates are
+      enforced in code."
+    example_filenames: ["tool_implementation.py", "refund_tool.py"]
+    example_snippet: |
+      def issue_refund(ctx, raw_input, *, mode="live"):
+          parsed = _validate(raw_input)   # JSON Schema + FK + business rules
+
+          if _needs_human_approval(ctx, parsed) and not ctx.approval_token_present():
+              raise ApprovalRequired(tool="issue_refund", payload=parsed.__dict__)
+
+          if mode == "dry_run":
+              return {"would_execute": True, "would_amount_cents": parsed.amount_cents}
+
+          if existing := idempotency_store.lookup(parsed.idempotency_key):
+              return existing   # idempotent replay
+          ...
+
+  - id: agent_loop
+    name: "Agent loop / orchestrator"
+    formats: [".py", ".ts", ".js", ".go", ".md", ".txt"]
+    required: false
+    description: "Code or pseudocode for the main agent loop."
+    novice_explanation: >
+      The "main()" of the agent. Shows the actual control flow of a
+      run: planning, plan validation, tool execution, checkpointing,
+      contradiction and loop detection, termination on budget /
+      escalation. Reveals whether the safety claims in the prose docs
+      are actually wired into the runtime.
+    ask_vendor: >
+      "Under NDA, please share your agent loop or orchestrator — code
+      or pseudocode is fine. I want to understand the actual control
+      flow: planning, validation, tool execution, checkpointing, loop
+      and contradiction detection, and how termination / escalation
+      works."
+    example_filenames: ["agent_loop.py", "orchestrator.py"]
+    example_snippet: |
+      while not plan.is_complete() and step_num <= budget.step_limit:
+          budget.assert_within_limits()                # raises on overrun
+          next_action = plan.next_action(state.snapshot())
+          result = ToolDispatcher.invoke(next_action.tool, next_action.params, ...)
+          state.absorb(result, source_step=step_num)
+
+          if violation := consistency.check(state):    # contradiction?
+              return escalate(trace, reason="contradiction_detected", ...)
+          if loop.signal_fires(state, plan, step_num):  # loop?
+              return escalate(trace, reason="loop_detected", ...)
+
+          checkpointer.checkpoint(step_num)
+          step_num += 1
+
+  - id: pricing_sla
+    name: "Pricing, SLA, contract terms"
+    formats: [".md", ".pdf"]
+    required: false
+    description: "Pricing tiers, guarantees, and contract terms."
+    novice_explanation: >
+      How the vendor charges, what they guarantee, what's negotiable.
+      Look for hard budget caps (per run and tenant-wide), model-change
+      notice (do they get to swap models on you mid-contract?), DPA
+      and SCCs, IP indemnification, and exit / data portability.
+    ask_vendor: >
+      "Please send pricing tiers, your standard SLA, and standard MSA
+      / DPA. I'm especially looking for: hard budget caps, model-change
+      notice period, DPA, IP indemnification, and exit / data portability
+      terms."
+    example_filenames: ["pricing_sla.md", "pricing.pdf"]
+    example_snippet: |
+      ## SLA
+      | Metric                | Pro            | Enterprise         |
+      |-----------------------|----------------|--------------------|
+      | Uptime                | 99.9% monthly  | 99.95% monthly     |
+      | Response p95          | < 8 s          | < 5 s              |
+      | Incident notification | < 24 h         | < 2 h for P1       |
+
+      ## Notable terms
+      - Model-change notice: 30 days; buyer can pin to N-1 for the
+        notice period; eval results published before any rollout.
+
+  - id: marketing
+    name: "Marketing collateral (ignored)"
+    formats: [".pdf", ".pptx", ".key"]
+    required: false
+    ignored_by_analyzer: true
+    description: "Sales decks and brochures. Accepted but not analyzed."
+    novice_explanation: >
+      Sales decks, brochures, case studies. The analyzer ignores these
+      because they rarely contain evaluable evidence and are often
+      contradicted by the rest of the pack. Upload them if you want
+      — they won't hurt the score, but they won't help it either.
+    ask_vendor: "(optional — these will be ignored by the analyzer)"
+    example_filenames: ["sales_deck.pdf", "brochure.pdf"]
+    example_snippet: ""

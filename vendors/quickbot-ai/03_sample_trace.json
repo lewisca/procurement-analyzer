@@ -1,0 +1,11 @@
+{
+  "run_id": "qb_run_4471",
+  "ticket": "Customer wants a refund",
+  "actions": [
+    {"action": "lookup_order", "result": "found"},
+    {"action": "refund", "result": "ok"},
+    {"action": "send_email", "result": "sent"}
+  ],
+  "status": "done",
+  "duration_sec": 6
+}

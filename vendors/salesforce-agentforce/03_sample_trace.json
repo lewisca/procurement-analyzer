@@ -1,0 +1,94 @@
+{
+  "_source": "Constructed from the Atlas Reasoning Engine ReAct loop described at cirra.ai's Atlas writeup and from Salesforce's Command Center documentation. Salesforce surfaces traces via the Agentforce Command Center dashboard — administrators can examine chain-of-thought traces from any conversation. Specific trace format is not publicly published outside Salesforce customer documentation.",
+
+  "_documented_observability_features": [
+    "Command Center dashboard displays agent activities, failure states, and decision rationales",
+    "Administrators can examine chain-of-thought traces from any conversation, enabling audits of the agent's reasoning",
+    "Feedback loop captures user signals (thumbs-up/down ratings, success metrics) and applies these insights through reinforcement learning or fine-tuning"
+  ],
+
+  "interaction_id": "sf_int_2026-06-04_a8c1d4e2",
+  "tenant_id": "acme_corp_prod",
+  "channel": "chat",
+  "agent_id": "service_agent_v2",
+  "topic_id": "process_refund",
+  "started_at": "2026-06-04T14:08:11.214Z",
+
+  "trust_layer_events": [
+    {"step": "input_received", "pii_masking": {"detected": ["email"], "masked_count": 1}, "toxicity_score": 0.02, "prompt_injection_check": "passed"}
+  ],
+
+  "react_loop": [
+    {
+      "iteration": 1,
+      "phase": "reason",
+      "llm": "claude-sonnet-4-6 (routed by Atlas for low-latency intent classification)",
+      "reasoning": "User is asking about a refund for order ORD-77129834. I need to: (1) verify the order exists, (2) check refund eligibility per policy, (3) execute the refund if within threshold or escalate.",
+      "topic_context": "Topic 'process_refund' policies: refunds over $200 require human approval; refunds outside 30-day window require supervisor authorization; fraud-flagged accounts must escalate."
+    },
+    {
+      "iteration": 1,
+      "phase": "act",
+      "action_invoked": "lookup_order",
+      "action_type": "apex",
+      "inputs": {"order_id": "ORD-77129834"},
+      "topic_allowed_check": "passed (action in topic.allowed_actions)",
+      "result": {"order_id": "ORD-77129834", "amount_cents": 24500, "status": "delivered", "days_since_purchase": 18}
+    },
+    {
+      "iteration": 1,
+      "phase": "observe",
+      "facts_added": ["order_exists=true", "amount=24500", "within_refund_window=true"],
+      "policy_check": "amount_cents (24500) > $200 threshold → requires human approval"
+    },
+    {
+      "iteration": 2,
+      "phase": "reason",
+      "llm": "gpt-5-2026 (routed by Atlas for policy reasoning)",
+      "reasoning": "Refund amount $245.00 exceeds the $200 auto-approve threshold. Per Topic policy, must escalate for human approval. Will use the escalate_to_supervisor action."
+    },
+    {
+      "iteration": 2,
+      "phase": "act",
+      "action_invoked": "escalate_to_supervisor",
+      "action_type": "salesforce_flow",
+      "inputs": {
+        "reason": "refund_over_threshold",
+        "order_id": "ORD-77129834",
+        "amount_cents": 24500,
+        "context_summary": "Customer requesting full refund for delivered order ORD-77129834. Within 30-day window. Policy requires supervisor approval over $200."
+      },
+      "topic_allowed_check": "passed",
+      "result": {
+        "case_id": "5005R00000ABC123",
+        "assigned_to": "supervisor_queue",
+        "estimated_response_time": "30 minutes"
+      }
+    },
+    {
+      "iteration": 2,
+      "phase": "observe",
+      "final_outcome": "transferred_to_human"
+    }
+  ],
+
+  "einstein_trust_layer_summary": {
+    "pii_masking_applied_in_logs": true,
+    "audit_log_written_to_command_center": true,
+    "data_residency_region": "us-east-2",
+    "llm_zero_data_retention_enforced": true
+  },
+
+  "observability": {
+    "command_center_link": "https://acmecorp.lightning.force.com/lightning/n/agentforce_command_center?conversation=sf_int_2026-06-04_a8c1d4e2",
+    "chain_of_thought_visible_to_admins": true,
+    "exportable_via": "Salesforce Events Layer / Data Cloud / SIEM connector"
+  },
+
+  "_caveats_for_procurement": [
+    "Trace SHAPE is reconstructed from Salesforce's published descriptions; Salesforce does not publish per-customer sample traces.",
+    "Specific Action / Topic / model names are illustrative.",
+    "Real implementation: Salesforce customers see traces in their Command Center; raw export schema is in Trailhead docs accessible to logged-in customers.",
+    "Verify: per-step reasoning visibility, retention defaults, export format, PII-masking field-by-field rules."
+  ]
+}

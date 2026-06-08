@@ -1,0 +1,132 @@
+{
+  "_source": "Extracted from platform.claude.com/docs/en/agents-and-tools/tool-use/overview and the Strict tool use docs. This is the actual schema format Anthropic requires for tool use with Claude.",
+
+  "schema_format": "JSON Schema",
+  "validation_mode": "strict (recommended) or default",
+
+  "client_tools_vs_server_tools": {
+    "client_tools": "Run in the developer's application. Includes user-defined tools and Anthropic-schema tools like bash and text_editor. Claude responds with stop_reason: 'tool_use' + tool_use blocks; your code executes and sends back tool_result.",
+    "server_tools": "Run on Anthropic's infrastructure. Examples: web_search, code_execution, web_fetch, tool_search. Results returned directly without developer handling execution. Reduces developer-side attack surface."
+  },
+
+  "strict_tool_use": {
+    "enabled_by": "Add `strict: true` to tool definition",
+    "guarantee": "Claude's tool calls will always match the schema exactly",
+    "documentation_quote": "Add `strict: true` to your tool definitions to ensure Claude's tool calls always match your schema exactly.",
+    "mechanism": "Constrains Claude's decoding to schema-conforming JSON, similar in principle to OpenAI's strict mode"
+  },
+
+  "tools_examples": [
+    {
+      "name": "get_weather",
+      "description": "Get the current weather for a given location.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "The city and state, e.g. San Francisco, CA"
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["celsius", "fahrenheit"],
+            "description": "Unit for temperature"
+          }
+        },
+        "required": ["location"]
+      },
+      "strict": true,
+      "destructiveness": "read_only",
+      "_client_or_server": "client (runs in developer's app)"
+    },
+
+    {
+      "type": "web_search_20260209",
+      "name": "web_search",
+      "_server_tool": true,
+      "_doc": "Anthropic-hosted server tool. Runs in Anthropic infrastructure; results returned to model context as content blocks."
+    },
+
+    {
+      "type": "code_execution",
+      "_server_tool": true,
+      "_doc": "Sandboxed code execution on Anthropic infrastructure. The model can run Python in an isolated environment without the developer hosting a sandbox."
+    },
+
+    {
+      "type": "web_fetch",
+      "_server_tool": true,
+      "_doc": "Fetch a URL through Anthropic's infrastructure (read-only)."
+    },
+
+    {
+      "type": "tool_search",
+      "_server_tool": true,
+      "_doc": "Dynamically load relevant tool definitions at runtime for vendors with large tool catalogs. Reduces context tokens consumed by tool definitions."
+    },
+
+    {
+      "name": "issue_refund",
+      "description": "Issue a refund against an order.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "order_id": {"type": "string", "pattern": "^ORD-[0-9]{5,10}$"},
+          "amount_cents": {"type": "integer", "minimum": 0, "maximum": 100000000},
+          "reason_code": {
+            "type": "string",
+            "enum": ["duplicate_charge", "item_not_received", "defective_item", "customer_request", "other"]
+          },
+          "idempotency_key": {"type": "string", "pattern": "^[a-f0-9-]{36}$"}
+        },
+        "required": ["order_id", "amount_cents", "reason_code", "idempotency_key"]
+      },
+      "strict": true,
+      "destructiveness": "write_high_risk",
+      "_note": "Like OpenAI, Anthropic's schema does not have first-class destructiveness or idempotency fields. These belong in the developer's tool implementation or in lifecycle hooks (PreToolUse / PostToolUse)."
+    }
+  ],
+
+  "agent_sdk_built_in_tools": [
+    {"name": "Read", "description": "Read any file in the working directory"},
+    {"name": "Write", "description": "Create new files"},
+    {"name": "Edit", "description": "Make precise edits to existing files"},
+    {"name": "Bash", "description": "Run terminal commands, scripts, git operations"},
+    {"name": "Monitor", "description": "Watch a background script and react to each output line as an event"},
+    {"name": "Glob", "description": "Find files by pattern (**/*.ts, src/**/*.py)"},
+    {"name": "Grep", "description": "Search file contents with regex"},
+    {"name": "WebSearch", "description": "Search the web for current information"},
+    {"name": "WebFetch", "description": "Fetch and parse web page content"},
+    {"name": "AskUserQuestion", "description": "Ask the user clarifying questions with multiple choice options"},
+    {"name": "Agent", "description": "Invoke a subagent for delegated work"}
+  ],
+
+  "tool_choice": {
+    "modes": ["auto (default)", "any", "tool (force specific)"],
+    "_doc": "Hard guarantee about which tools the model can use. Default 'auto' lets Claude decide; 'any' forces some tool; 'tool' with a name forces that specific tool."
+  },
+
+  "permission_modes": {
+    "default": "Prompts the user (or hook) for approval on risky tool use",
+    "acceptEdits": "Auto-approves file edits; useful for trusted CI flows",
+    "bypassPermissions": "Runs without prompting — only use in trusted environments",
+    "plan": "Shows what the agent would do without executing; equivalent to dry-run"
+  },
+
+  "validation_layer": {
+    "stage": "decode_time_under_strict_mode",
+    "strategy": "Strict tool use constrains Claude's decoding to schema-conforming JSON. Schema-invalid output is structurally impossible.",
+    "what_this_protects_against": [
+      "Hallucinated parameter types",
+      "Missing required fields",
+      "Out-of-enum values"
+    ],
+    "what_this_does_NOT_protect_against": [
+      "Semantically wrong but schema-valid arguments",
+      "Business-rule violations",
+      "Foreign-key non-existence",
+      "Idempotency violations"
+    ],
+    "_developer_pattern": "Use PreToolUse hooks to add foreign-key checks, business rules, or approval gates before tool execution. The hooks framework is finer-grained than guardrails-in-parallel."
+  }
+}

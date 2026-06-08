@@ -1,0 +1,203 @@
+{
+  "trace_id": "trc_01HXYZK7P4Q9N2M3R8V5W6T1JF",
+  "run_id": "run_2026-04-22_a7b3c9d1",
+  "tenant_id": "acme_retail_prod",
+  "use_case": "refund_request_over_threshold",
+  "ticket_id": "TKT-998877",
+  "model": "claude-sonnet-4-6",
+  "started_at": "2026-04-22T14:08:11.214Z",
+  "completed_at": "2026-04-22T14:08:33.951Z",
+  "duration_ms": 22737,
+  "total_tokens": {"input": 8421, "output": 1944, "total": 10365},
+  "total_cost_usd": 0.0431,
+  "budgets": {
+    "step_limit": 12,
+    "step_limit_remaining_on_completion": 5,
+    "token_budget": 20000,
+    "token_budget_remaining_on_completion": 9635,
+    "cost_cap_usd": 0.25,
+    "cost_remaining_on_completion": 0.2069
+  },
+  "outcome": "completed_with_human_approval",
+  "facts_state_final": {
+    "ticket.id": "TKT-998877",
+    "ticket.customer_email": "j.doe@example.com",
+    "customer.id": "CUST-447712",
+    "customer.risk_score": 0.18,
+    "order.id": "ORD-77129834",
+    "order.amount_cents": 24500,
+    "order.status": "delivered",
+    "order.delivered_at": "2026-04-12T09:22:00Z",
+    "policy.refund_window_days": 30,
+    "policy.refund_within_window": true,
+    "refund.requested_cents": 24500,
+    "refund.threshold_cents": 10000,
+    "refund.requires_approval": true,
+    "approval.requested_at": "2026-04-22T14:08:25.701Z",
+    "approval.approved_by": "agent_lead_42",
+    "approval.approved_at": "2026-04-22T14:08:31.114Z",
+    "refund.idempotency_key": "8c9e2a1b-4f6d-4a17-b2c1-9e3d8f4a7c10",
+    "refund.executed_at": "2026-04-22T14:08:33.602Z",
+    "refund.refund_id": "RFND-2026-001482"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "action_type": "plan",
+      "reasoning": "Ticket says customer wants full refund on ORD-77129834, claims item never arrived. Plan: (1) look up customer, (2) look up order, (3) check delivery status, (4) verify within refund policy, (5) request approval if >$100, (6) execute refund, (7) reply to customer.",
+      "predicted_steps": 7,
+      "predicted_tools": ["get_customer", "get_order", "search_kb", "issue_refund", "escalate_to_human"],
+      "tokens": {"in": 1820, "out": 312},
+      "cost_usd": 0.0083,
+      "elapsed_ms": 2114
+    },
+    {
+      "step": 2,
+      "action_type": "tool_call",
+      "tool": "get_customer",
+      "input": {"email": "j.doe@example.com"},
+      "input_validation": "passed",
+      "output": {"customer_id": "CUST-447712", "risk_score": 0.18, "lifetime_orders": 14, "lifetime_refunds": 1},
+      "checkpoint": {"facts_added": ["customer.id", "customer.risk_score"]},
+      "tokens": {"in": 412, "out": 88},
+      "cost_usd": 0.0018,
+      "elapsed_ms": 1981
+    },
+    {
+      "step": 3,
+      "action_type": "tool_call",
+      "tool": "get_order",
+      "input": {"order_id": "ORD-77129834"},
+      "input_validation": "passed",
+      "output": {
+        "order_id": "ORD-77129834",
+        "amount_cents": 24500,
+        "status": "delivered",
+        "delivered_at": "2026-04-12T09:22:00Z",
+        "tracking_proof_of_delivery": true
+      },
+      "checkpoint": {
+        "facts_added": ["order.id", "order.amount_cents", "order.status", "order.delivered_at"],
+        "contradiction_check": "Ticket asserts 'item never arrived' but order.tracking_proof_of_delivery == true. FLAG potential contradiction."
+      },
+      "tokens": {"in": 514, "out": 142},
+      "cost_usd": 0.0028,
+      "elapsed_ms": 2103
+    },
+    {
+      "step": 4,
+      "action_type": "reasoning",
+      "reasoning": "Contradiction detected at step 3: customer claim vs. carrier proof-of-delivery. Per policy doc kb_refund_policy_v7, when POD exists, refund is still permitted under 'item_not_received' if customer attests in writing. Customer's ticket includes attestation. Proceeding with refund but flagging POD discrepancy in approval request.",
+      "contradiction_handling": "documented_in_approval_request; not escalated to human-only path because policy permits this path with attestation.",
+      "tokens": {"in": 1102, "out": 218},
+      "cost_usd": 0.0049,
+      "elapsed_ms": 2654
+    },
+    {
+      "step": 5,
+      "action_type": "tool_call",
+      "tool": "search_kb",
+      "input": {"query": "refund eligibility item_not_received proof of delivery"},
+      "input_validation": "passed",
+      "output": {
+        "top_hit": "kb_refund_policy_v7#3.4",
+        "snippet": "Customers may receive a refund for 'item_not_received' even when carrier POD exists, provided the customer attests in writing and the order is within 30 days. Cases require approval if refund >= $100."
+      },
+      "checkpoint": {"facts_added": ["policy.refund_window_days", "policy.refund_within_window"]},
+      "tokens": {"in": 612, "out": 178},
+      "cost_usd": 0.0033,
+      "elapsed_ms": 2384
+    },
+    {
+      "step": 6,
+      "action_type": "tool_call",
+      "tool": "issue_refund",
+      "input": {
+        "order_id": "ORD-77129834",
+        "amount_cents": 24500,
+        "reason_code": "item_not_received",
+        "idempotency_key": "8c9e2a1b-4f6d-4a17-b2c1-9e3d8f4a7c10",
+        "_mode": "dry_run"
+      },
+      "input_validation": "passed",
+      "output": {
+        "would_execute": true,
+        "would_amount_cents": 24500,
+        "approval_required": true,
+        "approval_reason": "amount_cents (24500) > auto_approve_threshold (10000)"
+      },
+      "checkpoint": {
+        "facts_added": ["refund.requested_cents", "refund.threshold_cents", "refund.requires_approval"]
+      },
+      "tokens": {"in": 488, "out": 96},
+      "cost_usd": 0.0021,
+      "elapsed_ms": 1844
+    },
+    {
+      "step": 7,
+      "action_type": "approval_gate",
+      "gate": "issue_refund_over_threshold",
+      "approval_request": {
+        "tool": "issue_refund",
+        "amount_cents": 24500,
+        "customer_id": "CUST-447712",
+        "agent_notes": "Customer attests non-receipt. Carrier POD on file (timestamp 2026-04-12). Risk score 0.18 (low). Customer has 14 lifetime orders, 1 lifetime refund. Contradiction noted in trace step 3.",
+        "requested_at": "2026-04-22T14:08:25.701Z"
+      },
+      "approval_outcome": {
+        "approver_id": "agent_lead_42",
+        "decision": "approve",
+        "decision_at": "2026-04-22T14:08:31.114Z",
+        "decision_notes": "Approved. POD discrepancy documented; risk acceptable."
+      },
+      "tokens": {"in": 0, "out": 0},
+      "elapsed_ms": 5413
+    },
+    {
+      "step": 8,
+      "action_type": "tool_call",
+      "tool": "issue_refund",
+      "input": {
+        "order_id": "ORD-77129834",
+        "amount_cents": 24500,
+        "reason_code": "item_not_received",
+        "idempotency_key": "8c9e2a1b-4f6d-4a17-b2c1-9e3d8f4a7c10",
+        "_mode": "live",
+        "_approval_token": "appr_2026-04-22_agent_lead_42_a91f4c"
+      },
+      "input_validation": "passed",
+      "output": {"refund_id": "RFND-2026-001482", "status": "settled", "settled_at": "2026-04-22T14:08:33.602Z"},
+      "checkpoint": {"facts_added": ["refund.refund_id", "refund.executed_at"]},
+      "tokens": {"in": 380, "out": 64},
+      "cost_usd": 0.0014,
+      "elapsed_ms": 2244
+    }
+  ],
+  "consistency_checks": [
+    {
+      "step": 3,
+      "type": "input_vs_state",
+      "claim": "item not received",
+      "state_fact": "order.tracking_proof_of_delivery == true",
+      "verdict": "potential_contradiction",
+      "resolution": "documented in approval request; policy permits override with attestation"
+    },
+    {
+      "step": 6,
+      "type": "dry_run_before_live",
+      "verdict": "passed",
+      "note": "Refund > threshold; dry-run executed and reviewed before live call."
+    }
+  ],
+  "loop_detection": {
+    "checked_at_every_step": true,
+    "signals_tracked": ["repeated_tool_call_same_params", "repeated_reasoning_pattern", "state_hash_unchanged_3_steps"],
+    "fired": false
+  },
+  "export": {
+    "format": "JSON",
+    "endpoint": "/api/v1/traces/{trace_id}",
+    "replayable": true,
+    "buyer_export_retention_days": 365
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "_source": "Sourced from the Atlas Reasoning Engine writeup and Salesforce's Agentforce product documentation. Salesforce's tool concept is 'Actions' bound to 'Topics' — Topics are the configuration unit that determines which Actions an agent can invoke. Specific Action schemas are accessible only to Salesforce customers via Trailhead and the Agentforce admin console; this file documents the patterns Salesforce publicly describes.",
+
+  "core_abstractions": {
+    "topic": {
+      "description": "A predefined intent the agent can handle (e.g., 'process_refund', 'schedule_appointment', 'lookup_order'). Each Topic carries: natural-language instructions, business policies, and an allowed set of Actions.",
+      "implication": "Topics are first-class GUARDRAILS — an agent cannot invoke an Action that isn't in the current Topic's allowed set. The universe of possible behavior is bounded by Topic configuration, not discovered at runtime.",
+      "configured_by": "Salesforce admins / partners via the Agentforce Studio admin console (not by the LLM)"
+    },
+    "action": {
+      "description": "The agent's tool primitive. Five major action types are supported.",
+      "types": [
+        "Salesforce Flow (visual workflow)",
+        "Apex (Salesforce's server-side code)",
+        "API calls (REST or SOAP)",
+        "Slack / chatbot messages",
+        "Email dispatch",
+        "MCP-compatible external systems (Spring '26 addition)"
+      ]
+    }
+  },
+
+  "_topics_example": [
+    {
+      "topic_id": "process_refund",
+      "instructions": "Help customers who want to return an item and receive a refund. Verify order eligibility against policy before processing.",
+      "policies": [
+        "Refunds over $200 require human approval",
+        "Refunds outside the 30-day window require supervisor authorization",
+        "Fraud-flagged accounts must escalate to fraud team"
+      ],
+      "allowed_actions": [
+        "lookup_order",
+        "lookup_customer",
+        "check_refund_eligibility",
+        "process_refund_under_threshold",
+        "escalate_to_supervisor",
+        "send_confirmation_email"
+      ]
+    },
+    {
+      "topic_id": "schedule_appointment",
+      "instructions": "Help customers schedule, reschedule, or cancel appointments with sales reps.",
+      "policies": [
+        "Only schedule within rep availability windows",
+        "Confirm preferred contact method"
+      ],
+      "allowed_actions": [
+        "lookup_customer",
+        "get_rep_availability",
+        "create_appointment",
+        "send_calendar_invite"
+      ]
+    }
+  ],
+
+  "_action_example": {
+    "name": "process_refund_under_threshold",
+    "action_type": "apex",
+    "description": "Issue a refund up to $200 against a customer order.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "order_id": {"type": "string"},
+        "amount_cents": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "reason_code": {"type": "string", "enum": ["duplicate_charge", "item_not_received", "defective_item", "customer_request"]}
+      },
+      "required": ["order_id", "amount_cents", "reason_code"]
+    },
+    "destructiveness": "write_high_risk",
+    "_topic_binding": "process_refund (this Action is invokable ONLY within this Topic)"
+  },
+
+  "validation_layer": {
+    "stage": "topic_scoped + einstein_trust_layer",
+    "strategy_1_topic_scoping": "The Topic configuration restricts which Actions the agent can invoke. An agent assigned to topic_id='schedule_appointment' literally cannot select 'process_refund_under_threshold' — it's not in the topic's allowed_actions.",
+    "strategy_2_einstein_trust_layer": "Output of each Action's input/output passes through the Einstein Trust Layer: PII masking, toxicity check, prompt-injection detection, hallucination mitigation.",
+    "strategy_3_iterative_refinement": "Atlas 'evaluates LLM-generated plans through self-reflection or built-in verification, fine-tuning solutions until valid outputs emerge' (per Atlas technical writeup).",
+    "what_this_protects_against": [
+      "Cross-topic action invocation",
+      "PII leakage in Action arguments or outputs",
+      "Prompt injection attempts",
+      "Toxic / off-policy outputs"
+    ],
+    "what_it_does_NOT_protect_against_natively": [
+      "Semantically-wrong-but-policy-allowed argument values (developer-implemented Apex / Flow logic)",
+      "Foreign-key existence (typically handled by Salesforce data model)",
+      "Business-rule violations (developer encodes in Topic policies or Apex)"
+    ]
+  },
+
+  "dry_run_mode": {
+    "supported": "via Salesforce Sandbox environments",
+    "mechanism": "Salesforce admins typically configure Agentforce in a sandbox org with simulated data before promoting to production. Built-in 'preview' for many Actions, but per-run dry-run for arbitrary execution is sandbox-based, not in-product.",
+    "comparison_to_anthropic_plan_mode": "Salesforce's dry-run is environment-based (sandbox org), while Anthropic's permission_mode='plan' is per-run. Different shape."
+  },
+
+  "approval_gate": {
+    "supported": true,
+    "mechanism": "Topic policies + 'transfer to human' fallback actions. The Atlas writeup states: 'The system includes automatic transfer to human fallback actions when confidence drops or policy violations threaten.'",
+    "human_review_options": [
+      "Live agent handoff (Service Cloud agent receives full context)",
+      "Approval workflows (Salesforce Approval processes)",
+      "Action-level guards (Topic policy: 'this Action requires supervisor authorization')"
+    ]
+  },
+
+  "_buyer_followups": [
+    "Request a Topic configuration example for our specific use case — what's the Topic shape, what Actions are bound, what policies are encoded?",
+    "What's the cost / time to add a new Action to an existing Topic? (Often nontrivial — typically Salesforce partner / professional services work)",
+    "How granular is the Einstein Trust Layer audit? Can we get per-Action policy decisions in our SIEM?",
+    "MCP integration — what auth model does it use? Can we connect external tools without exposing internal credentials to Salesforce-managed infrastructure?"
+  ]
+}
