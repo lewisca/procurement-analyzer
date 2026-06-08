@@ -100,6 +100,10 @@ But you also can't pick a vendor on this rubric alone. It tells you what's verif
 
 A free tool that runs any agentic AI vendor's public documentation through the rubric and produces a structured report with verbatim evidence citations. The rubric is editable YAML. The methodology is open. You can drop in any vendor's public docs and get the same kind of analysis.
 
+Repo (MIT-licensed): **https://github.com/lewisca/procurement-analyzer**
+
+Sample reports for all five vendors above are in `examples/`. Methodology and rubric are in the YAML files — fully open for critique.
+
 I'd love feedback from procurement and IT leaders evaluating agentic AI right now. Three specific asks:
 
 1. Which rubric questions am I missing?
