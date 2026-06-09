@@ -210,10 +210,8 @@ Three high-leverage contribution paths if you want to help:
 
 ## About
 
-Built by [Chris Lewis](https://github.com/lewisca). Background in
-procurement / IT leadership; this is the tool I wished existed when
-evaluating agentic AI vendors for real procurement decisions.
+Built by [Chris Lewis](https://github.com/lewisca. Product leader (healthcare & fintech) who built the buyer-side evaluation tool 
+I wished existed when assessing agentic-AI vendors. 
 
-The rubric is derived from a published agentic-AI evaluation framework;
-the analyzer was built to make that framework executable against any
-vendor's public docs.
+The rubric is derived from a published agentic-AI evaluation framework; 
+the analyzer makes that framework executable against any vendor's public docs.
